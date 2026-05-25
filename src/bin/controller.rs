@@ -9,8 +9,8 @@ pub mod worker;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let redis = Redis::new();
-    let vm_pool = VmPool::new(redis.clone());
     let id_allocator = IdAllocator::new(redis.clone());
+    let vm_pool = VmPool::new(redis.clone(), id_allocator.clone());
     let s3_service = S3Service::new().await;
     let heartbeat_store = HeartbeatStore::new(redis);
 

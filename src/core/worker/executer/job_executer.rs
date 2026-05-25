@@ -46,25 +46,33 @@ impl JobExecuter {
     }
 
     async fn pull(&self, deploy_details: &DeployDetails) -> Result<(), AppError> {
-        let mut github_app = GithubApp::new();
+        let github_app = GithubApp::new();
 
-        self.host
-            .send_logs(&deploy_details.project_id, "Pulling repository...")
-            .await?;
+        // self.host
+        //     .send_logs(&deploy_details.project_id, "Pulling repository...")
+        //     .await?;
+
+        let (owner, repo) = {
+            let parts: Vec<&str> = deploy_details.full_name.split('/').collect();
+            (parts[0].to_string(), parts[1].to_string())
+        };
+
+        println!("owner is: {}", owner);
+        println!("repo is: {}", repo);
 
         let tarball_url = github_app
             .get_tarball_url(
-                deploy_details.branch.as_deref(),
-                &deploy_details.installation_id,
-                &deploy_details.owner,
-                &deploy_details.repo,
+                deploy_details.branch.clone(),
+                &owner,
+                &repo,
+                &deploy_details.installation_access_token,
             )
             .await?;
         println!("tarball url is: {}", tarball_url);
 
         let git_pull_cmd = format!(
             "curl -Lo {}.tar.gz {} -H 'Accept: application/vnd.github.v3+json' -H 'Authorization: token {}'",
-            deploy_details.project_id, tarball_url, deploy_details.access_token
+            deploy_details.project_id, tarball_url, deploy_details.installation_access_token
         );
 
         println!("git clone command is: {}", git_pull_cmd);
@@ -79,7 +87,8 @@ impl JobExecuter {
 
         let rename_cmd = format!(
             "mv {}-* {}",
-            deploy_details.project_id, deploy_details.project_id
+            deploy_details.full_name.replace("/", "-"),
+            deploy_details.project_id
         );
 
         println!("rename command is: {}", rename_cmd);
@@ -366,7 +375,7 @@ impl JobExecuter {
         println!("presigned upload url is: {}", presigned_upload_url);
 
         job_json.presigned_upload_url = presigned_upload_url;
-        job_json.access_token = redeploy_details.access_token.to_owned();
+        job_json.installation_access_token = redeploy_details.access_token.to_owned();
 
         println!("reached here");
 

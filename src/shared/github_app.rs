@@ -7,7 +7,12 @@ use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use reqwest::{Client, Method};
 use serde::Serialize;
 
-use crate::app_errors::AppError;
+use crate::{
+    app::webhooks::github_installation::{
+        GithubInstallationRepositoriesResponse, GithubRepository,
+    },
+    app_errors::AppError,
+};
 
 #[derive(Serialize)]
 struct Claims {
@@ -34,9 +39,9 @@ impl GithubApp {
             .as_secs();
 
         let claims = Claims {
-            iat: now,
+            iat: now - 60,
             exp: now + 600,
-            iss: env::var("GITHUB_APP_ID").unwrap().parse::<u64>().unwrap(),
+            iss: 3566236,
         };
 
         let key_str = fs::read_to_string("shipr-deployment.pem")?;
@@ -70,14 +75,12 @@ impl GithubApp {
         &self,
         method: Method,
         url: &str,
-        installation_id: u32,
+        installation_access_token: &str,
     ) -> Result<reqwest::Response, AppError> {
-        let token = self.get_installation_access_token(installation_id).await?;
-
         let res = self
             .client
             .request(method, url)
-            .bearer_auth(token)
+            .bearer_auth(installation_access_token)
             .header("User-Agent", "shipr-deployment")
             .header("Accept", "application/vnd.github+json")
             .send()
@@ -109,33 +112,31 @@ impl GithubApp {
 
     pub async fn get_user_installed_repos(
         &self,
-        installation_id: u32,
-    ) -> Result<Vec<serde_json::Value>, AppError> {
+        installation_access_token: &str,
+    ) -> Result<Vec<GithubRepository>, AppError> {
         let url = "https://api.github.com/installation/repositories";
 
         let res = self
-            .using_access_token_req(Method::GET, url, installation_id)
+            .using_access_token_req(Method::GET, url, &installation_access_token)
             .await?;
 
-        let json = res.json::<serde_json::Value>().await?;
+        let json = res.json::<GithubInstallationRepositoriesResponse>().await?;
 
-        let repos = json["repositories"]
-            .as_array()
-            .ok_or(AppError::InternalServerError)?;
+        let repos = json.repositories;
 
-        Ok(repos.to_vec())
+        Ok(repos)
     }
 
     async fn get_default_branch(
         &self,
-        installation_id: u32,
         owner: &str,
         repo: &str,
+        installation_access_token: &str,
     ) -> Result<String, AppError> {
         let url = format!("https://api.github.com/repos/{}/{}", owner, repo);
 
         let res = self
-            .using_access_token_req(Method::GET, &url, installation_id)
+            .using_access_token_req(Method::GET, &url, &installation_access_token)
             .await?;
 
         let json = res.json::<serde_json::Value>().await?;
@@ -147,13 +148,13 @@ impl GithubApp {
 
     pub async fn get_commit_sha(
         &self,
-        branch: Option<&str>,
-        installation_id: u32,
+        branch: Option<String>,
         owner: &str,
         repo: &str,
+        installation_access_token: &str,
     ) -> Result<String, AppError> {
         let branch = if branch.is_none() {
-            self.get_default_branch(installation_id, owner, repo)
+            self.get_default_branch(owner, repo, &installation_access_token)
                 .await?
         } else {
             branch.unwrap().to_string()
@@ -165,24 +166,28 @@ impl GithubApp {
         );
 
         let res = self
-            .using_access_token_req(Method::GET, &url, installation_id)
+            .using_access_token_req(Method::GET, &url, &installation_access_token)
             .await?;
         let json = res.json::<serde_json::Value>().await?;
 
+        println!("JSON: {}", json);
+
         let sha = json["sha"].as_str().unwrap();
+
+        println!("SHA: {}", sha);
 
         Ok(sha.to_string())
     }
 
     pub async fn get_tarball_url(
         &self,
-        branch: Option<&str>,
-        installation_id: u32,
+        branch: Option<String>,
         owner: &str,
         repo: &str,
+        installation_access_token: &str,
     ) -> Result<String, AppError> {
         let sha = self
-            .get_commit_sha(branch, installation_id, owner, repo)
+            .get_commit_sha(branch, owner, repo, &installation_access_token)
             .await?;
 
         let url = format!(

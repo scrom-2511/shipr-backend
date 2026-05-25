@@ -111,8 +111,8 @@ impl VmPool {
                 Ok((vm, false))
             }
             None => {
-                let mut new_vm = Firecracker::new_from_id_allocator(&self.id_allocator).await;
-                new_vm.create_new_vm_and_add_to_pool(self).await;
+                let vm_id = self.get_from_ideal_vms().await?.unwrap();
+                let new_vm = Firecracker::new_from_vm_id(vm_id);
 
                 Ok((new_vm, true))
             }

@@ -14,7 +14,7 @@ pub async fn kill_vm(
 
     println!("Killing VM: {}", vm_id);
 
-    let new_vm = Firecracker::new(id_allocator.clone()).await;
+    let new_vm = Firecracker::new_from_vm_id(vm_id);
 
     new_vm.destroy_vm().await?;
     vm_pool.remove_from_pool(&project_id, job_type).await?;

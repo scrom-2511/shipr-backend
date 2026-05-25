@@ -1,36 +1,50 @@
 use actix_web::{HttpResponse, web};
+use jsonwebtoken::signature::digest::const_oid;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     app::{controllers::ApiResponse, db::DbPool},
     app_errors::AppError,
 };
 
-#[derive(PartialEq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
 enum GithubWebhookAction {
     Created,
     Deleted,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
 struct GithubAccount {
     login: String,
     id: i32,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
 struct GithubAppInstallation {
     id: i32,
     client_id: String,
     account: GithubAccount,
 }
 
-struct GithubRepository {
-    id: i32,
-    name: String,
-    full_name: String,
+#[derive(Debug, Deserialize)]
+pub struct GithubInstallationRepositoriesResponse {
+    pub repositories: Vec<GithubRepository>,
 }
 
-struct GithubAppWebhookPayload {
+#[derive(Debug, Deserialize, Serialize)]
+pub struct GithubRepository {
+    pub id: i32,
+    pub name: String,
+    pub full_name: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct GithubAppWebhookPayload {
     action: GithubWebhookAction,
     installation: GithubAppInstallation,
+
+    #[serde(default)]
     repositories: Vec<GithubRepository>,
 }
 
@@ -38,6 +52,8 @@ pub async fn github_webhook_installation(
     body: web::Json<GithubAppWebhookPayload>,
     pool: web::Data<DbPool>,
 ) -> Result<HttpResponse, AppError> {
+    println!("body: {:?}", body);
+
     let body = body.into_inner();
 
     if body.action != GithubWebhookAction::Created {
@@ -48,13 +64,13 @@ pub async fn github_webhook_installation(
         }));
     }
 
-    let owner = vec![body.installation.account.login];
     let installation_id = vec![body.installation.id];
 
-    let query = r#"INSERT INTO github_app_installations (owner, installation_id) VALUES ($1, $2)"#;
+    println!("installation_id: {:?}", installation_id);
+
+    let query = r#"INSERT INTO github_repos (installation_ids) VALUES ($1)"#;
 
     sqlx::query(query)
-        .bind(owner)
         .bind(installation_id)
         .execute(pool.as_ref())
         .await

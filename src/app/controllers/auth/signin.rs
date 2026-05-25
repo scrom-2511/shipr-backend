@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, web};
+use actix_web::{HttpResponse, cookie::SameSite, web};
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
@@ -34,11 +34,7 @@ pub async fn signin_controller(
 
     println!("Valid credentials");
 
-    let query = r#"
-        SELECT email, password
-        FROM users 
-        WHERE email = $1
-    "#;
+    let query = r#"SELECT id, username, email, password, created_at FROM users WHERE email = $1"#;
 
     let user = sqlx::query_as::<_, User>(query)
         .bind(&signin.email)
@@ -65,7 +61,8 @@ pub async fn signin_controller(
             actix_web::cookie::Cookie::build("token", token)
                 .path("/")
                 .http_only(true)
-                .secure(false)
+                .secure(true)
+                .same_site(SameSite::None)
                 .finish(),
         )
         .json(ApiResponse::<()> {

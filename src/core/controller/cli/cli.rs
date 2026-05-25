@@ -4,12 +4,15 @@ use clap::{Parser, Subcommand};
 
 use crate::{
     app_errors::AppError,
-    core::app_types::DeployReq,
-    core::controller::{
-        cli::{deploy::deploy, listen::listen, serve::serve},
-        storage::s3::S3Service,
-        vm::{heartbeat_store::HeartbeatStore, id_allocator::IdAllocator, vm_pool::VmPool},
+    core::{
+        app_types::DeployReq,
+        controller::{
+            cli::{deploy::deploy, listen::listen, serve::serve},
+            storage::s3::S3Service,
+            vm::{heartbeat_store::HeartbeatStore, id_allocator::IdAllocator, vm_pool::VmPool},
+        },
     },
+    shared::github_app::GithubApp,
 };
 
 #[derive(Parser)]
@@ -83,29 +86,26 @@ pub async fn cli(
                 dist_dir,
                 home_dir,
                 install: Some(install),
-                url,
-                full_name,
+                full_name: "test".to_string(),
+                installation_id: 1,
+                name: "test".to_string(),
             };
 
             deploy(deploy_req).await?;
         }
 
         Commands::Test => {
-            // let vec = vec![0, 1, 2, 3, 4, 5, 6];
-
-            // for i in vec {
-            //     let firecracker = Firecracker::new(i);
-            //     firecracker.destroy_vm().await?;
-            //     println!("VM {} destroyed", i);
-            // }
-
-            let socket = UdpSocket::bind("0.0.0.0:0")?;
-
-            socket.connect("8.8.8.8:80")?;
-
-            let local_ip = socket.local_addr()?.ip();
-
-            println!("Default IP: {}", local_ip);
+            let github = GithubApp::new();
+            let installation_access_token = github.get_installation_access_token(135164979).await?;
+            let commit = github
+                .get_tarball_url(
+                    Some("main".to_string()),
+                    "scrom-2511",
+                    "shipr_test_project",
+                    &installation_access_token,
+                )
+                .await?;
+            println!("{:?}", commit);
         }
     }
 

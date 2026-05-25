@@ -147,19 +147,16 @@ impl JobDispatcher {
         &mut self,
         deploy_details: &DeployDetails,
     ) -> Result<(), AppError> {
-        self.git_url_validator(&deploy_details.url)?;
-
         let vm = self
             .vm_pool
             .get_or_create_vm(&deploy_details.project_id, JobType::Deploy)
             .await?
             .0;
 
-        let vm_id = vm.get_base_id();
+        let base_id = vm.get_base_id();
+        println!("vm id is: {}", base_id);
 
         self.move_json_to_vm(&vm, deploy_details).await?;
-
-        let base_id = vm_id * 4;
 
         let vm_ip = format!("172.16.0.{}", base_id + 2);
 

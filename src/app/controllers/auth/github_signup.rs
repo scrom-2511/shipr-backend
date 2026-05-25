@@ -2,9 +2,7 @@ use actix_web::{HttpResponse, web};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    app::controllers::auth::generate_token,
-    app::db::DbPool,
-    app::models::User,
+    app::controllers::auth::generate_token, app::db::DbPool, app::models::User,
     app_errors::AppError,
 };
 
@@ -81,7 +79,10 @@ pub async fn github_callback(
 
     let user_response: GithubUserResponse = client
         .get("https://api.github.com/user")
-        .header("Authorization", format!("Bearer {}", token_response.access_token))
+        .header(
+            "Authorization",
+            format!("Bearer {}", token_response.access_token),
+        )
         .header("User-Agent", "Shipr-App")
         .send()
         .await
@@ -95,7 +96,10 @@ pub async fn github_callback(
     } else {
         let emails: Vec<serde_json::Value> = client
             .get("https://api.github.com/user/emails")
-            .header("Authorization", format!("Bearer {}", token_response.access_token))
+            .header(
+                "Authorization",
+                format!("Bearer {}", token_response.access_token),
+            )
             .header("User-Agent", "Shipr-App")
             .send()
             .await
@@ -107,7 +111,11 @@ pub async fn github_callback(
         emails
             .into_iter()
             .find(|e| e.get("primary").and_then(|v| v.as_bool()).unwrap_or(false))
-            .and_then(|e| e.get("email").and_then(|v| v.as_str()).map(|s| s.to_string()))
+            .and_then(|e| {
+                e.get("email")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            })
             .ok_or_else(|| AppError::GithubOAuthError("No email found".to_string()))?
     };
 
@@ -137,7 +145,7 @@ pub async fn github_callback(
         new_user.id
     };
 
-    let token = generate_token(user_id, &email)?;
+    let token = generate_token(user_id)?;
 
     Ok(HttpResponse::Ok().json(GithubSignupResponse {
         message: "GitHub signup successful".to_string(),

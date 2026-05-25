@@ -21,6 +21,7 @@ pub async fn update_userid_github_app_installations(
     pool: web::Data<DbPool>,
     body: web::Json<UpdateUserIdGithubAppInstallationsRequest>,
 ) -> Result<HttpResponse, AppError> {
+    println!("body: {:?}", body);
     let user_id = req.extensions().get::<AuthMiddleware>().unwrap().user_id;
 
     let decoded_state = decode_token(&body.state)?;
@@ -29,8 +30,7 @@ pub async fn update_userid_github_app_installations(
         return Err(AppError::InvalidCredentials);
     }
 
-    let query =
-        r#"UPDATE github_app_installations SET user_id = $1 WHERE $2 = ANY(installation_ids)"#;
+    let query = r#"UPDATE github_repos SET user_id = $1 WHERE $2 = ANY(installation_ids)"#;
 
     let execute = sqlx::query(query)
         .bind(user_id)

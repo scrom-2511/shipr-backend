@@ -21,20 +21,7 @@ pub async fn deploy_handler(
 
     println!("Deploy details: {:?}", deploy_details);
 
-    let mut url = deploy_details.url.trim().to_string();
-
-    url = url.replace("https://github.com/", "");
-    url = url.replace(".git", "");
-
-    if url.ends_with('/') {
-        url.pop();
-    }
-
-    url = url.replace("/", "-");
-
-    println!("{}", url);
-
-    let project_id = url;
+    let project_id = deploy_details.full_name.replace("/", "-");
 
     let (tx, _) = channel::<String>(100);
 
