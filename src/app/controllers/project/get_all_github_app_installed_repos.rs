@@ -47,7 +47,7 @@ pub async fn get_all_github_app_installed_repos(
 
     for installation in github_app_installations {
         for id in installation.installation_ids {
-            let installation_access_token = github.get_installation_access_token(id as u32).await?;
+            let installation_access_token = github.get_installation_access_token(id as u64).await?;
             let repos = github
                 .get_user_installed_repos(&installation_access_token)
                 .await?;
