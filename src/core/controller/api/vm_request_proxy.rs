@@ -70,11 +70,10 @@ impl VmRequestProxy {
         let mut forward_req = self.client.request(method, target_url);
 
         for (name, value) in req.headers().iter() {
-            if let Ok(header_name) = HeaderName::from_bytes(name.as_str().as_bytes()) {
-                if let Ok(header_value) = HeaderValue::from_bytes(value.as_bytes()) {
+            if let Ok(header_name) = HeaderName::from_bytes(name.as_str().as_bytes())
+                && let Ok(header_value) = HeaderValue::from_bytes(value.as_bytes()) {
                     forward_req = forward_req.header(header_name, header_value);
                 }
-            }
         }
 
         let resp = forward_req.body(body).send().await;

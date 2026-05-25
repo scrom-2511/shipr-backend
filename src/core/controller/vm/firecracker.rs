@@ -148,7 +148,7 @@ impl Firecracker {
     }
 
     async fn set_rootfs(&self) -> Result<(), AppError> {
-        let rootfs_path = format!("rootfs-nodejs.ext4");
+        let rootfs_path = "rootfs-nodejs.ext4".to_string();
         let copy_rootfs = format!(r#"cp {} rootfs-{}.ext4"#, rootfs_path, self.vm_id);
 
         run_script(vec![&copy_rootfs], get_dir())?;

@@ -20,6 +20,12 @@ pub struct JobExecuter {
     host: Host,
 }
 
+impl Default for JobExecuter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl JobExecuter {
     pub fn new() -> Self {
         Self { host: Host::new() }
@@ -28,7 +34,7 @@ impl JobExecuter {
     fn extract_repo_name(&self, url: &str) -> Result<String, AppError> {
         let url = url.trim();
 
-        let last_part = url.split('/').last().ok_or(AppError::InvalidGitUrl)?;
+        let last_part = url.split('/').next_back().ok_or(AppError::InvalidGitUrl)?;
 
         let repo_name = last_part.strip_suffix(".git").unwrap_or(last_part);
 
@@ -110,7 +116,7 @@ impl JobExecuter {
             .send_logs(&deploy_details.project_id, "Installing dependencies...")
             .await?;
 
-        if !deploy_details.install_commands.is_none() {
+        if deploy_details.install_commands.is_some() {
             self.host
                 .send_logs(
                     &deploy_details.project_id,
@@ -175,7 +181,7 @@ impl JobExecuter {
             .send_logs(&deploy_details.project_id, "Building project...")
             .await?;
 
-        if !deploy_details.build_commands.is_none() {
+        if deploy_details.build_commands.is_some() {
             self.host
                 .send_logs(
                     &deploy_details.project_id,
@@ -252,12 +258,9 @@ impl JobExecuter {
 
         let host = Host::new();
 
-        match job_type {
-            JobType::Redeploy => {
-                host.redeployment_completed(deploy_details.project_id.to_owned(), job_type.clone())
-                    .await?;
-            }
-            _ => {}
+        if let JobType::Redeploy = job_type {
+            host.redeployment_completed(deploy_details.project_id.to_owned(), job_type.clone())
+                .await?;
         }
 
         host.kill_vm(deploy_details.project_id.to_owned(), job_type)

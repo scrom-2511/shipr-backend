@@ -1,6 +1,6 @@
 use actix_web::{
     HttpResponse,
-    web::{self, Bytes, Json, Query},
+    web::{self, Query},
 };
 
 use crate::{
@@ -24,7 +24,7 @@ pub async fn get_project_details_controller(
         .bind(project_id)
         .fetch_one(pool.as_ref())
         .await
-        .map_err(|e| AppError::InternalServerError)?;
+        .map_err(|_e| AppError::InternalServerError)?;
 
     Ok(HttpResponse::Ok().json(ApiResponse {
         success: true,

@@ -97,11 +97,10 @@ impl JobDispatcher {
     }
 
     fn git_url_validator(&self, git_url: &str) -> Result<bool, AppError> {
-        if let Ok(url) = Url::parse(git_url) {
-            if url.host_str() == Some("github.com") && url.scheme() == "https" {
+        if let Ok(url) = Url::parse(git_url)
+            && url.host_str() == Some("github.com") && url.scheme() == "https" {
                 return Ok(true);
             }
-        }
 
         Err(AppError::InvalidGitUrl)
     }
@@ -204,7 +203,7 @@ impl JobDispatcher {
     pub async fn dispatch_run_job(&mut self, project_id: &str) -> Result<(), AppError> {
         let (vm, is_new) = self
             .vm_pool
-            .get_or_create_vm(&project_id, JobType::Run)
+            .get_or_create_vm(project_id, JobType::Run)
             .await?;
 
         println!("is new is: {}", is_new);
@@ -223,10 +222,10 @@ impl JobDispatcher {
 
         println!("cp cmd run completed");
 
-        if is_new == true {
+        if is_new {
             let presigned_download_url = self
                 .s3_service
-                .get_presigned_download_url(&project_id.to_string())
+                .get_presigned_download_url(project_id)
                 .await?;
 
             let run_details = RunDetails {

@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     println!("{}", db_url);
 
-    let pool = sqlx::postgres::PgPool::connect(&db_url).await?;
+    let pool = sqlx::postgres::PgPool::connect(db_url).await?;
 
     println!("Connected to database");
 
@@ -65,16 +65,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     for _ in 0..1 {
         let mut new_vm = Firecracker::new_from_id_allocator(&id_allocator).await;
         new_vm.create_new_vm_and_add_to_pool(&vm_pool).await?;
-
-        // let new_id = id_allocator.allocate_id().await?;
-
-        // let mut new_vm = Firecracker::new_from_vm_id(new_id);
-        // new_vm.create_vm().await?;
     }
 
     let lapin_conn = Lapin::new().await?;
     let deploy_queue = web::Data::new(DeployQueue::new(&lapin_conn).await?);
-    let redeploy_queue = web::Data::new(ReDeployQueue::new(&lapin_conn).await?);
+    let _redeploy_queue = web::Data::new(ReDeployQueue::new(&lapin_conn).await?);
 
     let s3_service = s3_service.clone();
 

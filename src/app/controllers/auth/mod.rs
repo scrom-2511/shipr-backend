@@ -19,7 +19,7 @@ pub struct Claims {
 pub fn generate_token(user_id: i32) -> Result<String, AppError> {
     let now = chrono::Utc::now().timestamp() as u64;
     let claims = Claims {
-        user_id: user_id,
+        user_id,
         iat: now,
         exp: now + (24 * 60 * 60),
     };

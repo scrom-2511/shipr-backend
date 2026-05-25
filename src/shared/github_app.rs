@@ -25,6 +25,12 @@ pub struct GithubApp {
     client: Client,
 }
 
+impl Default for GithubApp {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GithubApp {
     pub fn new() -> Self {
         Self {
@@ -117,7 +123,7 @@ impl GithubApp {
         let url = "https://api.github.com/installation/repositories";
 
         let res = self
-            .using_access_token_req(Method::GET, url, &installation_access_token)
+            .using_access_token_req(Method::GET, url, installation_access_token)
             .await?;
 
         let json = res.json::<GithubInstallationRepositoriesResponse>().await?;
@@ -136,7 +142,7 @@ impl GithubApp {
         let url = format!("https://api.github.com/repos/{}/{}", owner, repo);
 
         let res = self
-            .using_access_token_req(Method::GET, &url, &installation_access_token)
+            .using_access_token_req(Method::GET, &url, installation_access_token)
             .await?;
 
         let json = res.json::<serde_json::Value>().await?;
@@ -154,7 +160,7 @@ impl GithubApp {
         installation_access_token: &str,
     ) -> Result<String, AppError> {
         let branch = if branch.is_none() {
-            self.get_default_branch(owner, repo, &installation_access_token)
+            self.get_default_branch(owner, repo, installation_access_token)
                 .await?
         } else {
             branch.unwrap().to_string()
@@ -166,7 +172,7 @@ impl GithubApp {
         );
 
         let res = self
-            .using_access_token_req(Method::GET, &url, &installation_access_token)
+            .using_access_token_req(Method::GET, &url, installation_access_token)
             .await?;
         let json = res.json::<serde_json::Value>().await?;
 
@@ -187,7 +193,7 @@ impl GithubApp {
         installation_access_token: &str,
     ) -> Result<String, AppError> {
         let sha = self
-            .get_commit_sha(branch, owner, repo, &installation_access_token)
+            .get_commit_sha(branch, owner, repo, installation_access_token)
             .await?;
 
         let url = format!(

@@ -1,4 +1,3 @@
-use std::net::UdpSocket;
 
 use clap::{Parser, Subcommand};
 
@@ -71,7 +70,7 @@ pub async fn cli(
         }
 
         Commands::Deploy {
-            url,
+            url: _,
             install,
             build,
             run,

@@ -62,7 +62,7 @@ pub async fn add_new_project(
         .bind(&project.dist_dir)
         .bind(&project.home_dir)
         .bind(&project.url)
-        .bind(&project.user_id)
+        .bind(project.user_id)
         .execute(pool.as_ref())
         .await;
 

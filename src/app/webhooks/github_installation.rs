@@ -1,5 +1,4 @@
 use actix_web::{HttpResponse, web};
-use jsonwebtoken::signature::digest::const_oid;
 use serde::{Deserialize, Serialize};
 
 use crate::{

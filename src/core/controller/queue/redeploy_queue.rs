@@ -6,9 +6,7 @@ use lapin::{
 };
 
 use crate::{
-    app_errors::AppError,
-    core::app_types::{DeployReq, RedeployDetails, RedeployEvent},
-    core::controller::queue::lapin::Lapin,
+    app_errors::AppError, core::app_types::RedeployEvent, core::controller::queue::lapin::Lapin,
 };
 
 pub struct ReDeployQueue {

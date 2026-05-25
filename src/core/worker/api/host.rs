@@ -7,6 +7,12 @@ pub struct Host {
     client: Client,
 }
 
+impl Default for Host {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Host {
     pub fn new() -> Self {
         Self {

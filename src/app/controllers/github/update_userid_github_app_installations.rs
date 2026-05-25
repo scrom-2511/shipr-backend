@@ -32,7 +32,7 @@ pub async fn update_userid_github_app_installations(
 
     let query = r#"UPDATE github_repos SET user_id = $1 WHERE $2 = ANY(installation_ids)"#;
 
-    let execute = sqlx::query(query)
+    let _execute = sqlx::query(query)
         .bind(user_id)
         .bind(body.installation_id)
         .execute(pool.as_ref())

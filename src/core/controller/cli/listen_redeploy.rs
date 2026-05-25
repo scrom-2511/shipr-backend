@@ -35,7 +35,7 @@ pub async fn listen_redeploy(
 
         let project_id = redeploy_event.repository.full_name.replace("/", "-");
 
-        let (owner, repo) = {
+        let (_owner, _repo) = {
             let parts: Vec<&str> = redeploy_event.repository.full_name.split('/').collect();
             (parts[0].to_string(), parts[1].to_string())
         };

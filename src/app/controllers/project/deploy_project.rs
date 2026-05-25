@@ -1,4 +1,3 @@
-use std::fs;
 
 use actix_web::{
     HttpMessage, HttpRequest, HttpResponse,
@@ -6,13 +5,11 @@ use actix_web::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
-use tokio::sync::broadcast::channel;
 
 use crate::{
     app::{controllers::ApiResponse, db::DbPool, middlewares::AuthMiddleware},
     app_errors::AppError,
     core::{app_types::DeployReq, controller::queue::deploy_queue::DeployQueue},
-    shared::github_app::GithubApp,
 };
 
 #[derive(Serialize, Deserialize, FromRow)]
