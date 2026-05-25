@@ -1,34 +1,130 @@
-use actix_web::{
-    HttpResponse,
-    web::{self, Query},
-};
+use crate::app::controllers::ApiResponse;
+use crate::app::db::DbPool;
+use crate::app::middlewares::AuthMiddleware;
+use crate::app_errors::AppError;
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, web};
+use chrono::NaiveDateTime;
+use serde::Serialize;
+use sqlx::FromRow;
 
-use crate::{
-    app::{controllers::ApiResponse, db::DbPool, models::Project},
-    app_errors::AppError,
-};
-
-pub struct GetProjectsDetailsQuery {
+#[derive(serde::Deserialize)]
+pub struct GetProjectDetailsQuery {
     pub project_id: i32,
+}
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct ProjectDetail {
+    pub id: i32,
+    pub name: String,
+    pub full_name: String,
+    pub branch: String,
+    pub status: String,
+    pub last_deployment_time: NaiveDateTime,
+    pub home_dir: String,
+    pub dist_dir: String,
+    pub install_cmds: Vec<String>,
+    pub build_cmds: Vec<String>,
+    pub run_cmds: Vec<String>,
+    pub github_url: String,
+    pub commit_hash: String,
+}
+
+#[derive(FromRow)]
+struct ProjectRow {
+    pub id: i32,
+    pub name: String,
+    pub full_name: String,
+    pub branch: String,
+    pub status: String,
+    pub last_deployment_time: Option<NaiveDateTime>,
+    pub home_dir: String,
+    pub dist_dir: String,
+    pub install_cmds: Option<Vec<String>>,
+    pub build_cmds: Option<Vec<String>>,
+    pub run_cmds: Option<Vec<String>>,
+    pub url: String,
+    pub commit_hash: String,
 }
 
 pub async fn get_project_details_controller(
     pool: web::Data<DbPool>,
-    query: Query<GetProjectsDetailsQuery>,
+    req: HttpRequest,
+    query: web::Query<GetProjectDetailsQuery>,
 ) -> Result<HttpResponse, AppError> {
+    println!(
+        "get_project_details_controller called for project_id: {}",
+        query.project_id
+    );
+
+    let user_id = req
+        .extensions()
+        .get::<AuthMiddleware>()
+        .ok_or_else(|| {
+            println!("Error: AuthMiddleware not found in request extensions");
+            AppError::InternalServerError
+        })?
+        .user_id;
+
+    println!("user_id: {}", user_id);
+
     let project_id = query.project_id;
 
-    let query = "SELECT * FROM projects WHERE id = $1";
+    let query_str = r#"
+        SELECT 
+            id, name, full_name, branch, status::text as status, last_deployment_time, 
+            home_dir, dist_dir, install_cmds, build_cmds, run_cmds, 
+            url, commit_hash
+        FROM projects 
+        WHERE id = $1 AND user_id = $2
+    "#;
 
-    let project_details = sqlx::query_as::<_, Project>(query)
+    let row: ProjectRow = sqlx::query_as(query_str)
         .bind(project_id)
-        .fetch_one(pool.as_ref())
+        .bind(user_id)
+        .fetch_optional(pool.as_ref())
         .await
-        .map_err(|_e| AppError::InternalServerError)?;
+        .map_err(|e| {
+            println!("Database error: {}", e);
+            AppError::Database(e.to_string())
+        })?
+        .ok_or_else(|| {
+            println!("Project not found: id={}, user_id={}", project_id, user_id);
+            AppError::Database("Project not found".to_string())
+        })?;
+
+    let status = match row.status.as_str() {
+        "active" => "active",
+        "deploying" => "building",
+        "error" => "error",
+        _ => "error",
+    };
+
+    let project = ProjectDetail {
+        id: row.id,
+        name: row.name,
+        full_name: row.full_name,
+        branch: row.branch,
+        status: status.to_string(),
+        last_deployment_time: row
+            .last_deployment_time
+            .unwrap_or_else(|| chrono::Utc::now().naive_utc()),
+        home_dir: row.home_dir,
+        dist_dir: row.dist_dir,
+        install_cmds: row.install_cmds.unwrap_or_default(),
+        build_cmds: row.build_cmds.unwrap_or_default(),
+        run_cmds: row.run_cmds.unwrap_or_default(),
+        github_url: row.url,
+        commit_hash: row.commit_hash,
+    };
+
+    println!(
+        "Successfully fetched project details for id: {}",
+        project.id
+    );
 
     Ok(HttpResponse::Ok().json(ApiResponse {
         success: true,
         message: "Successfully fetched the project details".to_string(),
-        data: Some(project_details),
+        data: Some(project),
     }))
 }
