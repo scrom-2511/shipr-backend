@@ -24,17 +24,19 @@ CREATE TABLE projects (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE,
 
-    project_id VARCHAR(255) NOT NULL UNIQUE,
-
     install_cmds TEXT[],
     run_cmds TEXT[],
     build_cmds TEXT[],
 
+    branch VARCHAR(255) NOT NULL,
+    project_type VARCHAR(255) NOT NULL,
+    full_name VARCHAR(255) NOT NULL UNIQUE,
+
     dist_dir VARCHAR(255) NOT NULL,
     home_dir VARCHAR(255) NOT NULL,
+
     url VARCHAR(255) NOT NULL UNIQUE,
 
-    repo_id INTEGER NOT NULL REFERENCES github_repos(id) ON DELETE CASCADE,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 
     commit_hash VARCHAR(255) NOT NULL,

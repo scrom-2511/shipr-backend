@@ -5,7 +5,7 @@ use tokio::net::TcpStream;
 use crate::{
     app_errors::AppError,
     core::{
-        app_types::{DeployDetails, JobType, RedeployDetails, RunDetails},
+        app_types::{DeployDetails, JobType, ProjectType, RedeployDetails, RunDetails},
         config::{app_config::get_worker_dir, project_default_config::get_default_config},
         infra::{
             detect::detect_project_type,
@@ -51,7 +51,11 @@ impl JobExecuter {
         }
     }
 
-    async fn pull(&self, deploy_details: &DeployDetails) -> Result<(), AppError> {
+    async fn pull(
+        &self,
+        deploy_details: &DeployDetails,
+        commit_hash: Option<String>,
+    ) -> Result<String, AppError> {
         let github_app = GithubApp::new();
 
         // self.host
@@ -66,13 +70,21 @@ impl JobExecuter {
         println!("owner is: {}", owner);
         println!("repo is: {}", repo);
 
+        let commit_hash = if commit_hash.is_none() {
+            github_app
+                .get_commit_sha(
+                    deploy_details.branch.clone(),
+                    &owner,
+                    &repo,
+                    &deploy_details.installation_access_token,
+                )
+                .await?
+        } else {
+            commit_hash.unwrap()
+        };
+
         let tarball_url = github_app
-            .get_tarball_url(
-                deploy_details.branch.clone(),
-                &owner,
-                &repo,
-                &deploy_details.installation_access_token,
-            )
+            .get_tarball_url_from_commit_hash(&commit_hash, &owner, &repo)
             .await?;
         println!("tarball url is: {}", tarball_url);
 
@@ -104,7 +116,7 @@ impl JobExecuter {
             get_worker_dir(),
         )?;
 
-        Ok(())
+        Ok(commit_hash)
     }
 
     async fn install(&self, deploy_details: &DeployDetails) -> Result<(), AppError> {
@@ -249,8 +261,13 @@ impl JobExecuter {
         &self,
         deploy_details: &DeployDetails,
         job_type: JobType,
+        commit_hash: Option<String>,
     ) -> Result<(), AppError> {
-        self.pull(deploy_details).await?;
+        let commit_hash = if job_type == JobType::Deploy {
+            self.pull(deploy_details, None).await?
+        } else {
+            self.pull(deploy_details, commit_hash).await?
+        };
 
         self.install(deploy_details).await?;
 
@@ -258,10 +275,16 @@ impl JobExecuter {
 
         let host = Host::new();
 
-        if let JobType::Redeploy = job_type {
-            host.redeployment_completed(deploy_details.project_id.to_owned(), job_type.clone())
-                .await?;
-        }
+        let project_path = self.get_project_path(deploy_details)?;
+        let project_type = detect_project_type(&project_path);
+
+        host.job_completed(
+            deploy_details.full_name.to_owned(),
+            job_type.clone(),
+            Some(commit_hash),
+            project_type,
+        )
+        .await?;
 
         host.kill_vm(deploy_details.project_id.to_owned(), job_type)
             .await?;
@@ -380,13 +403,19 @@ impl JobExecuter {
         job_json.presigned_upload_url = presigned_upload_url;
         job_json.installation_access_token = redeploy_details.access_token.to_owned();
 
+        if let Some(branch) = &redeploy_details.branch {
+            job_json.branch = Some(branch.clone());
+        }
+
         println!("reached here");
 
         let rm_previous_project = format!("rm -rf /root/{}*", project_id);
 
         run_script(vec![&rm_previous_project], get_worker_dir())?;
 
-        self.execute(&job_json, job_type).await?;
+        let commit_hash = redeploy_details.commit_hash.clone();
+
+        self.execute(&job_json, job_type, Some(commit_hash)).await?;
 
         Ok(())
     }

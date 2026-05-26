@@ -1,7 +1,7 @@
 use reqwest::Client;
 use serde_json::json;
 
-use crate::{app_errors::AppError, core::app_types::JobType};
+use crate::{app_errors::AppError, core::app_types::{JobType, ProjectType}};
 
 pub struct Host {
     client: Client,
@@ -44,16 +44,20 @@ impl Host {
         Ok(())
     }
 
-    pub async fn redeployment_completed(
+    pub async fn job_completed(
         &self,
         project_id: String,
         job_type: JobType,
+        commit_hash: Option<String>,
+        project_type: ProjectType,
     ) -> Result<(), AppError> {
         self.client
-            .post("https://francisco-unscholarlike-punctually.ngrok-free.dev/redeploy-completed")
+            .post("https://francisco-unscholarlike-punctually.ngrok-free.dev/job-completed")
             .json(&json!({
                 "project_id": project_id,
                 "job_type": job_type,
+                "commit_hash": commit_hash,
+                "project_type": project_type,
             }))
             .send()
             .await?;

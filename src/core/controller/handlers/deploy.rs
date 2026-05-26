@@ -21,7 +21,7 @@ pub async fn deploy_handler(
 
     println!("Deploy details: {:?}", deploy_details);
 
-    let project_id = deploy_details.full_name.replace("/", "-");
+    let project_id = deploy_details.full_name.replace("/", "~");
 
     let (tx, _) = channel::<String>(100);
 

@@ -16,7 +16,7 @@ pub struct User {
 pub enum ProjectStatus {
     Active,
     Deploying,
-    Inactive,
+    Error,
 }
 
 #[derive(Debug, FromRow, Deserialize, Serialize)]

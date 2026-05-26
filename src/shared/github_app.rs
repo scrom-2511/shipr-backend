@@ -97,7 +97,7 @@ impl GithubApp {
 
     pub async fn get_installation_access_token(
         &self,
-        installation_id: u32,
+        installation_id: u64,
     ) -> Result<String, AppError> {
         let url = format!(
             "https://api.github.com/app/installations/{}/access_tokens",
@@ -178,11 +178,11 @@ impl GithubApp {
 
         println!("JSON: {}", json);
 
-        let sha = json["sha"].as_str().unwrap();
+        let commit_hash = json["commit_hash"].as_str().unwrap();
 
-        println!("SHA: {}", sha);
+        println!("SHA: {}", commit_hash);
 
-        Ok(sha.to_string())
+        Ok(commit_hash.to_string())
     }
 
     pub async fn get_tarball_url(
@@ -192,13 +192,27 @@ impl GithubApp {
         repo: &str,
         installation_access_token: &str,
     ) -> Result<String, AppError> {
-        let sha = self
+        let commit_hash = self
             .get_commit_sha(branch, owner, repo, installation_access_token)
             .await?;
 
         let url = format!(
             "https://api.github.com/repos/{}/{}/tarball/{}",
-            owner, repo, sha
+            owner, repo, commit_hash
+        );
+
+        Ok(url)
+    }
+
+    pub async fn get_tarball_url_from_commit_hash(
+        &self,
+        commit_hash: &str,
+        owner: &str,
+        repo: &str,
+    ) -> Result<String, AppError> {
+        let url = format!(
+            "https://api.github.com/repos/{}/{}/tarball/{}",
+            owner, repo, commit_hash
         );
 
         Ok(url)

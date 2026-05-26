@@ -31,6 +31,7 @@ pub async fn github_webhook_push(
     pool: web::Data<DbPool>,
     redeploy_queue: web::Data<ReDeployQueue>,
 ) -> Result<HttpResponse, AppError> {
+    println!("github_webhook_push called");
     let body = body.into_inner();
 
     redeploy_queue.publish(&body).await.unwrap();

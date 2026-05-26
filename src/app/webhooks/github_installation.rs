@@ -51,17 +51,7 @@ pub async fn github_webhook_installation(
     body: web::Json<GithubAppWebhookPayload>,
     pool: web::Data<DbPool>,
 ) -> Result<HttpResponse, AppError> {
-    println!("body: {:?}", body);
-
     let body = body.into_inner();
-
-    if body.action != GithubWebhookAction::Created {
-        return Ok(HttpResponse::Ok().json(ApiResponse::<()> {
-            success: true,
-            message: "Installation not created".to_string(),
-            data: None,
-        }));
-    }
 
     let installation_id = vec![body.installation.id];
 

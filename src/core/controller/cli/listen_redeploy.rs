@@ -33,7 +33,7 @@ pub async fn listen_redeploy(
             }
         };
 
-        let project_id = redeploy_event.repository.full_name.replace("/", "-");
+        let project_id = redeploy_event.repository.full_name.replace("/", "~");
 
         let (_owner, _repo) = {
             let parts: Vec<&str> = redeploy_event.repository.full_name.split('/').collect();
@@ -42,17 +42,39 @@ pub async fn listen_redeploy(
 
         let github = GithubApp::new();
 
-        let presigned_upload_url = s3_service
-            .get_presigned_upload_url(&project_id)
-            .await
-            .unwrap();
+        let presigned_upload_url = match s3_service.get_presigned_upload_url(&project_id).await {
+            Ok(url) => url,
+            Err(e) => {
+                eprintln!("Failed to get presigned upload url: {:?}", e);
+                continue;
+            }
+        };
 
-        let presigned_download_url = s3_service
-            .get_presigned_download_url(&project_id)
-            .await
-            .unwrap();
+        let presigned_download_url = match s3_service.get_presigned_download_url(&project_id).await
+        {
+            Ok(url) => url,
+            Err(e) => {
+                eprintln!("Failed to get presigned download url: {:?}", e);
+                continue;
+            }
+        };
 
-        let access_token = github.get_installation_access_token(12345).await.unwrap();
+        let access_token = match github
+            .get_installation_access_token(redeploy_event.installation.id)
+            .await
+        {
+            Ok(token) => token,
+            Err(e) => {
+                eprintln!("Failed to get installation access token: {:?}", e);
+                continue;
+            }
+        };
+
+        let branch = redeploy_event
+            .ref_field
+            .split('/')
+            .last()
+            .map(|s| s.to_string());
 
         let redeploy_details = RedeployDetails {
             commit_hash: redeploy_event.after,
@@ -60,6 +82,7 @@ pub async fn listen_redeploy(
             presigned_upload_url,
             project_id: project_id.to_owned(),
             access_token,
+            branch,
         };
 
         let id_allocator = id_allocator.clone();

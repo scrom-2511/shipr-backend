@@ -11,11 +11,15 @@ use shipr::app::controllers::github::update_userid_github_app_installations::upd
 use shipr::app::controllers::project::add_new_project::add_new_project;
 use shipr::app::controllers::project::check_name_availability::check_repo_name_availability;
 use shipr::app::controllers::project::deploy_project::deploy_project_controller;
-use shipr::app::controllers::project::get_all_deployed_projects::get_all_projects_controller;
+use shipr::app::controllers::project::get_all_deployed_projects::get_all_deployed_projects_controller;
 use shipr::app::controllers::project::get_all_github_app_installed_repos::get_all_github_app_installed_repos;
+use shipr::app::controllers::project::get_project_details::get_project_details_controller;
+use shipr::app::controllers::project::job_completed::job_completed_controller;
+
 use shipr::app::middlewares::is_logged_in::is_logged_in;
 use shipr::app::webhooks::github_installation::github_webhook_installation;
 use shipr::core::controller::cli::listen_deploy::listen_deploy;
+use shipr::core::controller::cli::listen_redeploy::listen_redeploy;
 use shipr::core::controller::dispatcher::job_dispatcher::JobDispatcher;
 use shipr::core::controller::queue::deploy_queue::DeployQueue;
 use shipr::core::controller::queue::lapin::Lapin;
@@ -69,7 +73,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let lapin_conn = Lapin::new().await?;
     let deploy_queue = web::Data::new(DeployQueue::new(&lapin_conn).await?);
-    let _redeploy_queue = web::Data::new(ReDeployQueue::new(&lapin_conn).await?);
+    let redeploy_queue = web::Data::new(ReDeployQueue::new(&lapin_conn).await?);
 
     let s3_service = s3_service.clone();
 
@@ -92,9 +96,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
         });
     }
 
+    {
+        let id_allocator = id_allocator.clone();
+        let vm_pool = vm_pool.clone();
+        let redeploy_queue = redeploy_queue.clone();
+        let job_dispatcher = job_dispatcher.clone();
+        let s3_service = s3_service.clone();
+
+        tokio::spawn(async move {
+            listen_redeploy(
+                s3_service,
+                job_dispatcher,
+                id_allocator,
+                vm_pool,
+                redeploy_queue,
+            )
+            .await;
+        });
+    }
+
     HttpServer::new(move || {
         let cors = actix_cors::Cors::default()
-            .allowed_origin("https://rivers-among-illinois-royalty.trycloudflare.com")
+            .allowed_origin("https://terminology-club-trader-domain.trycloudflare.com")
             .allowed_origin("http://localhost:5173")
             .allow_any_method()
             .allow_any_header()
@@ -103,14 +126,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         App::new()
             .app_data(deploy_queue.clone())
-            // .app_data(redeploy_queue.clone())
+            .app_data(redeploy_queue.clone())
             .app_data(id_allocator.clone())
             .app_data(vm_pool.clone())
             .wrap(cors)
             .app_data(web::Data::new(pool.clone()))
             .route("/signup", web::post().to(signup_controller))
             .route("/signin", web::post().to(signin_controller))
-            .route("/get-projects", web::get().to(get_all_projects_controller))
             .route("/add-project", web::post().to(add_new_project))
             .route("/auth/github", web::get().to(github_auth_url))
             .route("/auth/github/callback", web::get().to(github_callback))
@@ -122,6 +144,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 "/check-repo-name-availability",
                 web::post().to(check_repo_name_availability),
             )
+            .route("/job-completed", web::post().to(job_completed_controller))
             .service(
                 web::scope("")
                     .wrap(from_fn(is_logged_in))
@@ -134,7 +157,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         "/get-all-github-app-installed-repos",
                         web::get().to(get_all_github_app_installed_repos),
                     )
-                    .route("/deploy-project", web::post().to(deploy_project_controller)),
+                    .route("/deploy-project", web::post().to(deploy_project_controller))
+                    .route(
+                        "/get-all-deployed-projects",
+                        web::get().to(get_all_deployed_projects_controller),
+                    )
+                    .route(
+                        "/get-project-detail",
+                        web::get().to(get_project_details_controller),
+                    ),
             )
     })
     .bind(("127.0.0.1", 3000))?

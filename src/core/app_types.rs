@@ -4,8 +4,6 @@ use std::collections::HashMap;
 use actix_web::web;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, broadcast::Sender};
-
-pub type InstallationStore = web::Data<Mutex<HashMap<String, InstallationEvent>>>;
 pub type LogsStore = web::Data<Mutex<HashMap<String, Sender<String>>>>;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -18,7 +16,7 @@ pub struct DeployReq {
     pub dist_dir: String,
     pub home_dir: String,
     pub full_name: String,
-    pub installation_id: u32,
+    pub installation_id: u64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -41,6 +39,7 @@ pub struct RedeployDetails {
     pub presigned_download_url: String,
     pub access_token: String,
     pub commit_hash: String,
+    pub branch: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -50,14 +49,14 @@ pub struct RunDetails {
     pub project_id: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum JobType {
     Deploy,
     Run,
     Redeploy,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum ProjectType {
     Html,
     Rust,
@@ -79,59 +78,15 @@ impl fmt::Display for ProjectType {
     }
 }
 
-#[derive(Deserialize, Debug, Serialize, Clone)]
-pub struct InstallationEvent {
-    pub action: String,
-    pub installation: Installation,
-    pub repositories: Vec<Repository>,
-}
-
-#[derive(Deserialize, Debug, Serialize, Clone)]
-pub struct Installation {
-    pub id: u64,
-}
-
-#[derive(Deserialize, Clone, Debug, Serialize)]
-pub struct Repository {
-    pub full_name: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct RedeployEvent {
-    #[serde(rename = "ref")]
-    pub ref_field: String,
-
-    pub after: String,
-
-    pub repository: Repository,
-
-    pub installation: Installation,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct Pusher {
-    pub name: String,
-    pub email: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct Commit {
-    pub id: String,
-    pub message: String,
-    pub timestamp: String,
-    pub url: String,
-    pub modified: Vec<String>,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum EventType {
-    Install(InstallationEvent),
-    Push(RedeployEvent),
-}
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct KillVmReq {
     pub project_id: String,
     pub job_type: JobType,
+}
+#[derive(Serialize, Deserialize, Debug)]
+pub struct JobCompletedReq {
+    pub project_id: String,
+    pub job_type: JobType,
+    pub commit_hash: Option<String>,
+    pub project_type: ProjectType,
 }

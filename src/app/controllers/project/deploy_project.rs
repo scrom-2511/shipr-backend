@@ -1,4 +1,3 @@
-
 use actix_web::{
     HttpMessage, HttpRequest, HttpResponse,
     web::{self},
@@ -28,7 +27,7 @@ pub async fn deploy_project_controller(
 
     println!("Deploy details: {:?}", body);
 
-    let project_id = body.full_name.replace("/", "-");
+    let project_id = body.full_name.replace("/", "~");
 
     // let (tx, _) = channel::<String>(100);
 
@@ -67,12 +66,12 @@ pub async fn deploy_project_controller(
 
     deploy_queue.add_to_queue(&body).await?;
 
-    let query = "INSERT INTO projects (name, project_id, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)";
+    let query = "INSERT INTO projects (name, status, last_deployment_time, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)";
 
     sqlx::query(query)
         .bind(&body.name)
-        .bind(&project_id)
         .bind("deploying")
+        .bind(chrono::Utc::now())
         .bind(chrono::Utc::now())
         .bind(chrono::Utc::now())
         .execute(pool.as_ref())

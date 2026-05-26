@@ -8,13 +8,13 @@ use tokio::sync::{Mutex, broadcast::Sender};
 
 use crate::{
     app_errors::AppError,
-    core::app_types::{InstallationEvent, InstallationStore, LogsStore},
+    core::app_types::LogsStore,
     core::controller::{
         cli::{listen_deploy::listen_deploy, listen_redeploy::listen_redeploy},
         dispatcher::job_dispatcher::JobDispatcher,
         handlers::{
             deploy::deploy_handler,
-            github::github_webhook,
+            // github::github_webhook,
             kill_vm::kill_vm_handler,
             logs::{logs_handler, stream_logs_handler},
             redeployment_completed::redeploy_completed_handler,
@@ -34,9 +34,6 @@ pub async fn listen(
     s3_service: S3Service,
     heartbeat_store: HeartbeatStore,
 ) -> Result<(), AppError> {
-    let installation_ids: InstallationStore =
-        web::Data::new(Mutex::new(HashMap::<String, InstallationEvent>::new()));
-
     let logs_store: LogsStore =
         web::Data::new(Mutex::new(HashMap::<String, Sender<String>>::new()));
 
@@ -106,14 +103,14 @@ pub async fn listen(
 
     HttpServer::new(move || {
         App::new()
-            .app_data(installation_ids.clone())
+            // .app_data(installation_ids.clone())
             .app_data(deploy_queue.clone())
             .app_data(redeploy_queue.clone())
             .app_data(id_allocator.clone())
             .app_data(vm_pool.clone())
             .app_data(logs_store.clone())
             .route("/kill-vm", web::post().to(kill_vm_handler))
-            .route("/webhook/github", web::post().to(github_webhook))
+            // .route("/webhook/github", web::post().to(github_webhook))
             .route("/deploy", web::post().to(deploy_handler))
             .route("/send-logs", web::post().to(logs_handler))
             .route("/logs/{project_id}", web::get().to(stream_logs_handler))

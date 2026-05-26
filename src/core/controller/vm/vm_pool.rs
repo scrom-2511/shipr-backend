@@ -111,7 +111,9 @@ impl VmPool {
                 Ok((vm, false))
             }
             None => {
-                let vm_id = self.get_from_ideal_vms().await?.unwrap();
+                let vm_id = self.get_from_ideal_vms().await?.ok_or_else(|| {
+                    AppError::QueueError("No ideal VMs available in pool".to_string())
+                })?;
                 let new_vm = Firecracker::new_from_vm_id(vm_id);
 
                 Ok((new_vm, true))

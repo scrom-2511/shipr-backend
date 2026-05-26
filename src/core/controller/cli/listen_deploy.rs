@@ -48,7 +48,7 @@ pub async fn listen_deploy(
 
         println!("Cleaned URL: {}", cleaned_url);
 
-        let project_id = deploy_details_req.name;
+        let project_id = deploy_details_req.full_name.replace("/", "~");
 
         let presigned_upload_url = s3_service
             .get_presigned_upload_url(&project_id)

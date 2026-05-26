@@ -6,7 +6,8 @@ use lapin::{
 };
 
 use crate::{
-    app_errors::AppError, core::app_types::RedeployEvent, core::controller::queue::lapin::Lapin,
+    app::webhooks::github_push::GithubPushEvent, app_errors::AppError,
+    core::controller::queue::lapin::Lapin,
 };
 
 pub struct ReDeployQueue {
@@ -44,7 +45,7 @@ impl ReDeployQueue {
         Ok(Self { channel, queue })
     }
 
-    pub async fn publish(&self, redeploy_event: RedeployEvent) -> Result<(), AppError> {
+    pub async fn publish(&self, redeploy_event: &GithubPushEvent) -> Result<(), AppError> {
         self.channel
             .basic_publish(
                 ShortString::from(""),
@@ -61,7 +62,7 @@ impl ReDeployQueue {
         Ok(())
     }
 
-    pub async fn consume(&self) -> Result<RedeployEvent, AppError> {
+    pub async fn consume(&self) -> Result<GithubPushEvent, AppError> {
         let mut consumer = self
             .channel
             .basic_consume(
@@ -76,7 +77,7 @@ impl ReDeployQueue {
         while let Some(delivery) = consumer.next().await {
             let delivery = delivery.map_err(|e| AppError::LapinError(e.to_string()))?;
 
-            let redeploy_event = serde_json::from_slice::<RedeployEvent>(&delivery.data)
+            let redeploy_event = serde_json::from_slice::<GithubPushEvent>(&delivery.data)
                 .map_err(|e| AppError::LapinError(e.to_string()))?;
 
             delivery

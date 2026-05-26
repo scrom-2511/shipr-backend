@@ -26,7 +26,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let worker = JobExecuter::new();
 
-            worker.execute(&deploy_details, JobType::Deploy).await?;
+            worker
+                .execute(&deploy_details, JobType::Deploy, None)
+                .await?;
         }
         "run" => {
             let run_details = serde_json::from_str::<RunDetails>(&content).unwrap();
