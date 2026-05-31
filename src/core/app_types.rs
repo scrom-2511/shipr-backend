@@ -6,15 +6,22 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, broadcast::Sender};
 pub type LogsStore = web::Data<Mutex<HashMap<String, Sender<String>>>>;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct EnvVar {
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DeployReq {
-    pub name: String,
-    pub install: Option<Vec<String>>,
-    pub build: Option<Vec<String>>,
-    pub run: Option<Vec<String>>,
-    pub branch: Option<String>,
+    pub project_id: String,
+    pub install_cmds: Vec<String>,
+    pub build_cmds: Vec<String>,
+    pub run_cmds: Vec<String>,
+    pub envs: Vec<EnvVar>,
+    pub branch: String,
     pub dist_dir: String,
-    pub home_dir: String,
+    pub root_dir: String,
     pub full_name: String,
     pub installation_id: u64,
 }
@@ -26,10 +33,11 @@ pub struct DeployDetails {
     pub build_commands: Option<Vec<String>>,
     pub full_name: String,
     pub project_id: String,
-    pub home_dir: String,
+    pub root_dir: String,
     pub dist_dir: String,
     pub presigned_upload_url: String,
     pub installation_access_token: String,
+    pub envs: Option<Vec<EnvVar>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -40,6 +48,7 @@ pub struct RedeployDetails {
     pub access_token: String,
     pub commit_hash: String,
     pub branch: Option<String>,
+    pub envs: Option<Vec<EnvVar>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -47,6 +56,7 @@ pub struct RunDetails {
     pub presigned_download_url: String,
     pub run_command: String,
     pub project_id: String,
+    pub envs: Option<Vec<EnvVar>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -56,7 +66,7 @@ pub enum JobType {
     Redeploy,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub enum ProjectType {
     Html,
     Rust,
@@ -89,4 +99,5 @@ pub struct JobCompletedReq {
     pub job_type: JobType,
     pub commit_hash: Option<String>,
     pub project_type: ProjectType,
+    pub branch: Option<String>,
 }

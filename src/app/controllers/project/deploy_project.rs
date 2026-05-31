@@ -27,7 +27,7 @@ pub async fn deploy_project_controller(
 
     println!("Deploy details: {:?}", body);
 
-    let project_id = body.full_name.replace("/", "~");
+    // let _project_id = &body.project_id;
 
     // let (tx, _) = channel::<String>(100);
 
@@ -66,14 +66,30 @@ pub async fn deploy_project_controller(
 
     deploy_queue.add_to_queue(&body).await?;
 
-    let query = "INSERT INTO projects (name, status, last_deployment_time, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)";
+    println!("Project added to queue successfully");
+
+    let envs = vec![{
+        let json = serde_json::to_string(&body.envs).unwrap();
+        crate::shared::crypto::Crypto::encrypt(&json)
+    }];
+
+    let query = "INSERT INTO projects (project_id, status, full_name, dist_dir, root_dir, user_id, last_deployment_time, created_at, updated_at, install_cmds, build_cmds, run_cmds, branch, envs) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)";
 
     sqlx::query(query)
-        .bind(&body.name)
+        .bind(&body.project_id)
         .bind("deploying")
+        .bind(&body.full_name)
+        .bind(&body.dist_dir)
+        .bind(&body.root_dir)
+        .bind(user_id)
         .bind(chrono::Utc::now())
         .bind(chrono::Utc::now())
         .bind(chrono::Utc::now())
+        .bind(&body.install_cmds)
+        .bind(&body.build_cmds)
+        .bind(&body.run_cmds)
+        .bind(&body.branch)
+        .bind(envs)
         .execute(pool.as_ref())
         .await
         .map_err(|e| AppError::Database(e.to_string()))?;

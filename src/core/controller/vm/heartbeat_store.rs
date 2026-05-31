@@ -22,7 +22,7 @@ impl HeartbeatStore {
     pub async fn heartbeat(&self, project_id: &str, ttl: Duration) -> Result<(), AppError> {
         let key = self.heartbeat_key(project_id);
 
-        let mut conn = self.redis.get_conn().await?;
+        let mut conn = self.redis.get_conn();
 
         let _: () = conn.set_ex(key, "alive", ttl.as_secs()).await?;
 
@@ -32,7 +32,7 @@ impl HeartbeatStore {
     pub async fn is_dead(&self, project_id: &str) -> Result<bool, AppError> {
         let key = self.heartbeat_key(project_id);
 
-        let mut conn = self.redis.get_conn().await?;
+        let mut conn = self.redis.get_conn();
 
         let exists: bool = conn.exists(key).await?;
 
@@ -42,7 +42,7 @@ impl HeartbeatStore {
     pub async fn remove(&self, project_id: &str) -> Result<(), AppError> {
         let key = self.heartbeat_key(project_id);
 
-        let mut conn = self.redis.get_conn().await?;
+        let mut conn = self.redis.get_conn();
 
         let _: () = conn.del(key).await?;
 

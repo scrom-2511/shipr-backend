@@ -14,10 +14,12 @@ use shipr::app::controllers::project::deploy_project::deploy_project_controller;
 use shipr::app::controllers::project::get_all_deployed_projects::get_all_deployed_projects_controller;
 use shipr::app::controllers::project::get_all_github_app_installed_repos::get_all_github_app_installed_repos;
 use shipr::app::controllers::project::get_project_details::get_project_details_controller;
+use shipr::app::controllers::project::get_project_traffic::get_project_traffic_controller;
 use shipr::app::controllers::project::job_completed::job_completed_controller;
 
+use shipr::app::controllers::project::kill_vm_controller::kill_vm_controller;
 use shipr::app::middlewares::is_logged_in::is_logged_in;
-use shipr::app::webhooks::github_installation::github_webhook_installation;
+use shipr::app::webhooks::github_event::github_event;
 use shipr::core::controller::cli::listen_deploy::listen_deploy;
 use shipr::core::controller::cli::listen_redeploy::listen_redeploy;
 use shipr::core::controller::dispatcher::job_dispatcher::JobDispatcher;
@@ -53,7 +55,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     println!("Server running on port 9000");
 
-    let redis = Redis::new();
+    let redis = Redis::new().await;
     let id_allocator = IdAllocator::new(redis.clone());
     let vm_pool = VmPool::new(redis.clone(), id_allocator.clone());
     let s3_service = S3Service::new().await;
@@ -64,11 +66,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         s3_service.clone(),
         id_allocator.clone(),
         heartbeat_store.clone(),
+        pool.clone(),
     );
 
     for _ in 0..1 {
         let mut new_vm = Firecracker::new_from_id_allocator(&id_allocator).await;
-        new_vm.create_new_vm_and_add_to_pool(&vm_pool).await?;
+        new_vm.create_hot_vm(&vm_pool).await?;
     }
 
     let lapin_conn = Lapin::new().await?;
@@ -102,6 +105,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let redeploy_queue = redeploy_queue.clone();
         let job_dispatcher = job_dispatcher.clone();
         let s3_service = s3_service.clone();
+        let pool_data = web::Data::new(pool.clone());
 
         tokio::spawn(async move {
             listen_redeploy(
@@ -110,6 +114,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 id_allocator,
                 vm_pool,
                 redeploy_queue,
+                pool_data,
             )
             .await;
         });
@@ -117,7 +122,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     HttpServer::new(move || {
         let cors = actix_cors::Cors::default()
-            .allowed_origin("https://terminology-club-trader-domain.trycloudflare.com")
+            .allowed_origin("https://cooling-board-victor-parents.trycloudflare.com")
             .allowed_origin("http://localhost:5173")
             .allow_any_method()
             .allow_any_header()
@@ -127,8 +132,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         App::new()
             .app_data(deploy_queue.clone())
             .app_data(redeploy_queue.clone())
-            .app_data(id_allocator.clone())
-            .app_data(vm_pool.clone())
+            .app_data(web::Data::new(id_allocator.clone()))
+            .app_data(web::Data::new(vm_pool.clone()))
             .wrap(cors)
             .app_data(web::Data::new(pool.clone()))
             .route("/signup", web::post().to(signup_controller))
@@ -136,15 +141,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .route("/add-project", web::post().to(add_new_project))
             .route("/auth/github", web::get().to(github_auth_url))
             .route("/auth/github/callback", web::get().to(github_callback))
-            .route(
-                "/webhook/github",
-                web::post().to(github_webhook_installation),
-            )
+            .route("/webhook/github", web::post().to(github_event))
             .route(
                 "/check-repo-name-availability",
                 web::post().to(check_repo_name_availability),
             )
             .route("/job-completed", web::post().to(job_completed_controller))
+            .route("/kill-vm", web::post().to(kill_vm_controller))
             .service(
                 web::scope("")
                     .wrap(from_fn(is_logged_in))
@@ -165,6 +168,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     .route(
                         "/get-project-detail",
                         web::get().to(get_project_details_controller),
+                    )
+                    .route(
+                        "/get-project-traffic",
+                        web::get().to(get_project_traffic_controller),
                     ),
             )
     })

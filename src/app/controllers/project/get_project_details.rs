@@ -15,12 +15,12 @@ pub struct GetProjectDetailsQuery {
 #[derive(Debug, Serialize, FromRow)]
 pub struct ProjectDetail {
     pub id: i32,
-    pub name: String,
+    pub project_id: String,
     pub full_name: String,
     pub branch: String,
     pub status: String,
     pub last_deployment_time: NaiveDateTime,
-    pub home_dir: String,
+    pub root_dir: String,
     pub dist_dir: String,
     pub install_cmds: Vec<String>,
     pub build_cmds: Vec<String>,
@@ -32,18 +32,18 @@ pub struct ProjectDetail {
 #[derive(FromRow)]
 struct ProjectRow {
     pub id: i32,
-    pub name: String,
+    pub project_id: String,
     pub full_name: String,
-    pub branch: String,
+    pub branch: Option<String>,
     pub status: String,
     pub last_deployment_time: Option<NaiveDateTime>,
-    pub home_dir: String,
+    pub root_dir: String,
     pub dist_dir: String,
     pub install_cmds: Option<Vec<String>>,
     pub build_cmds: Option<Vec<String>>,
     pub run_cmds: Option<Vec<String>>,
-    pub url: String,
-    pub commit_hash: String,
+    pub url: Option<String>,
+    pub commit_hash: Option<String>,
 }
 
 pub async fn get_project_details_controller(
@@ -71,8 +71,8 @@ pub async fn get_project_details_controller(
 
     let query_str = r#"
         SELECT 
-            id, name, full_name, branch, status::text as status, last_deployment_time, 
-            home_dir, dist_dir, install_cmds, build_cmds, run_cmds, 
+            id, project_id, full_name, branch, status::text as status, last_deployment_time, 
+            root_dir, dist_dir, install_cmds, build_cmds, run_cmds, 
             url, commit_hash
         FROM projects 
         WHERE id = $1 AND user_id = $2
@@ -101,20 +101,20 @@ pub async fn get_project_details_controller(
 
     let project = ProjectDetail {
         id: row.id,
-        name: row.name,
+        project_id: row.project_id,
         full_name: row.full_name,
-        branch: row.branch,
+        branch: row.branch.unwrap_or_default(),
         status: status.to_string(),
         last_deployment_time: row
             .last_deployment_time
             .unwrap_or_else(|| chrono::Utc::now().naive_utc()),
-        home_dir: row.home_dir,
+        root_dir: row.root_dir,
         dist_dir: row.dist_dir,
         install_cmds: row.install_cmds.unwrap_or_default(),
         build_cmds: row.build_cmds.unwrap_or_default(),
         run_cmds: row.run_cmds.unwrap_or_default(),
-        github_url: row.url,
-        commit_hash: row.commit_hash,
+        github_url: row.url.unwrap_or_default(),
+        commit_hash: row.commit_hash.unwrap_or_default(),
     };
 
     println!(

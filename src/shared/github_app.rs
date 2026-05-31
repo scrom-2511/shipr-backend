@@ -158,7 +158,7 @@ impl GithubApp {
         owner: &str,
         repo: &str,
         installation_access_token: &str,
-    ) -> Result<String, AppError> {
+    ) -> Result<(String, String), AppError> {
         let branch = if branch.is_none() {
             self.get_default_branch(owner, repo, installation_access_token)
                 .await?
@@ -176,13 +176,9 @@ impl GithubApp {
             .await?;
         let json = res.json::<serde_json::Value>().await?;
 
-        println!("JSON: {}", json);
+        let commit_hash = json["sha"].as_str().unwrap();
 
-        let commit_hash = json["commit_hash"].as_str().unwrap();
-
-        println!("SHA: {}", commit_hash);
-
-        Ok(commit_hash.to_string())
+        Ok((commit_hash.to_string(), branch))
     }
 
     pub async fn get_tarball_url(
@@ -192,7 +188,7 @@ impl GithubApp {
         repo: &str,
         installation_access_token: &str,
     ) -> Result<String, AppError> {
-        let commit_hash = self
+        let (commit_hash, _) = self
             .get_commit_sha(branch, owner, repo, installation_access_token)
             .await?;
 

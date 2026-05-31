@@ -19,7 +19,7 @@ pub async fn deploy(deploy_req: DeployReq) -> Result<(), AppError> {
         "Connect the project's repository with shipr by visiting. Opening the url in your browser..."
     );
 
-    run_script(vec![&format!("xdg-open {}", github_app_url)], get_dir())?;
+    run_script(vec![&format!("xdg-open {}", github_app_url)], get_dir()).await?;
 
     println!("Waiting for installation...");
 

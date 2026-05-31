@@ -26,7 +26,7 @@ pub async fn check_repo_name_availability(
         SELECT EXISTS(
             SELECT 1
             FROM projects
-            WHERE name = $1
+            WHERE project_id = $1
         )
         "#,
     )
@@ -35,7 +35,7 @@ pub async fn check_repo_name_availability(
     .await
     .map_err(|e| {
         println!("DB ERROR: {:?}", e);
-        AppError::InternalServerError
+        AppError::Database(e.to_string())
     })?;
 
     Ok(HttpResponse::Ok().json(ApiResponse {

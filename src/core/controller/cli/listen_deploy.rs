@@ -1,9 +1,8 @@
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 use actix_web::web;
 
 use crate::{
-    app_errors::AppError,
     core::{
         app_types::DeployDetails,
         controller::{
@@ -48,7 +47,7 @@ pub async fn listen_deploy(
 
         println!("Cleaned URL: {}", cleaned_url);
 
-        let project_id = deploy_details_req.full_name.replace("/", "~");
+        let project_id = deploy_details_req.project_id;
 
         let presigned_upload_url = s3_service
             .get_presigned_upload_url(&project_id)
@@ -58,29 +57,30 @@ pub async fn listen_deploy(
         println!("Access Token fetched");
 
         let deploy_details = DeployDetails {
-            install_commands: deploy_details_req.install,
-            build_commands: deploy_details_req.build,
-            branch: deploy_details_req.branch,
+            install_commands: Some(deploy_details_req.install_cmds),
+            build_commands: Some(deploy_details_req.build_cmds),
+            branch: Some(deploy_details_req.branch),
             full_name: deploy_details_req.full_name,
-            home_dir: deploy_details_req.home_dir,
+            root_dir: deploy_details_req.root_dir,
             dist_dir: deploy_details_req.dist_dir,
             presigned_upload_url,
             installation_access_token: access_token,
+            envs: Some(deploy_details_req.envs),
             project_id,
         };
 
         let id_allocator = id_allocator.clone();
         let vm_pool = vm_pool.clone();
 
-        tokio::task::spawn(async move {
-            let mut new_vm = Firecracker::new_from_id_allocator(&id_allocator).await;
-            new_vm.create_new_vm_and_add_to_pool(&vm_pool).await?;
-
-            Ok::<(), AppError>(())
-        });
-
         if let Err(e) = job_dispatcher.dispatch_deploy_job(&deploy_details).await {
             eprintln!("Job dispatch failed: {:?}", e);
         }
+
+        tokio::task::spawn(async move {
+            let mut new_vm = Firecracker::new_from_id_allocator(&id_allocator).await;
+            if let Err(e) = new_vm.create_hot_vm(&vm_pool).await {
+                eprintln!("Failed to create VM: {:?}", e);
+            }
+        });
     }
 }

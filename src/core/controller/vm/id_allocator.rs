@@ -17,7 +17,7 @@ impl IdAllocator {
     }
 
     async fn remove_from_current_ids(&self, id: u8) -> Result<(), AppError> {
-        let mut conn = self.redis.get_conn().await?;
+        let mut conn = self.redis.get_conn();
 
         let _: () = conn.srem(CURRENT_IDS, id).await?;
 
@@ -25,7 +25,7 @@ impl IdAllocator {
     }
 
     pub async fn allocate_id(&self) -> Result<u8, AppError> {
-        let mut conn = self.redis.get_conn().await?;
+        let mut conn = self.redis.get_conn();
 
         for id in 1..MAX_IDS {
             let inserted: u8 = conn.sadd(CURRENT_IDS, id).await?;

@@ -10,7 +10,16 @@ pub async fn kill_vm(
     vm_pool: &VmPool,
     id_allocator: &IdAllocator,
 ) -> Result<(), AppError> {
-    let vm_id = vm_pool.get_from_pool(project_id, job_type).await?.unwrap();
+    let vm_id = match vm_pool.get_from_pool(project_id, job_type).await? {
+        Some(id) => id,
+        None => {
+            println!(
+                "No active VM found for project: {} and job_type: {:?}",
+                project_id, job_type
+            );
+            return Ok(());
+        }
+    };
 
     println!("Killing VM: {}", vm_id);
 

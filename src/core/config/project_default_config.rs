@@ -5,16 +5,16 @@ pub struct ProjectDefaultConfig {
     pub build_commands: Vec<&'static str>,
     pub run_command: Option<&'static str>,
     pub dist_dir: &'static str,
-    pub home_dir: &'static str,
+    pub root_dir: &'static str,
 }
 
 pub fn node_default_config() -> ProjectDefaultConfig {
     ProjectDefaultConfig {
         install_commands: vec!["npm install"],
-        build_commands: vec!["npx tsc", "npm run build"],
+        build_commands: vec!["npx tsc"],
         run_command: Some("node index.js"),
         dist_dir: "dist",
-        home_dir: ".",
+        root_dir: ".",
     }
 }
 
@@ -24,7 +24,7 @@ pub fn react_default_config() -> ProjectDefaultConfig {
         build_commands: vec!["npm run build"],
         run_command: None,
         dist_dir: "dist",
-        home_dir: ".",
+        root_dir: ".",
     }
 }
 
@@ -34,7 +34,7 @@ pub fn html_default_config() -> ProjectDefaultConfig {
         build_commands: vec![],
         run_command: Some("npx serve ."),
         dist_dir: "dist",
-        home_dir: ".",
+        root_dir: ".",
     }
 }
 

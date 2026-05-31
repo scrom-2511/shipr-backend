@@ -1,8 +1,8 @@
-use actix_web::{HttpResponse, web};
+use actix_web::web;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    app::{controllers::ApiResponse, db::DbPool},
+    app::db::DbPool,
     app_errors::AppError,
 };
 
@@ -50,7 +50,7 @@ pub struct GithubAppWebhookPayload {
 pub async fn github_webhook_installation(
     body: web::Json<GithubAppWebhookPayload>,
     pool: web::Data<DbPool>,
-) -> Result<HttpResponse, AppError> {
+) -> Result<(), AppError> {
     let body = body.into_inner();
 
     let installation_id = vec![body.installation.id];
@@ -65,9 +65,5 @@ pub async fn github_webhook_installation(
         .await
         .map_err(|_| AppError::InternalServerError)?;
 
-    Ok(HttpResponse::Ok().json(ApiResponse::<()> {
-        success: true,
-        message: "Installation recorded successfully".to_string(),
-        data: None,
-    }))
+    Ok(())
 }

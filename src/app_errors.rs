@@ -62,6 +62,12 @@ pub enum AppError {
     #[error("Failed to start firecracker: {0}")]
     StartingFirecrackerFailed(String),
 
+    #[error("Reload the page")]
+    ReloadPage,
+
+    #[error("Failed to get connection from pool: {0}")]
+    FailedToGetConnectionFromPool(String),
+
     #[error("VM not ready")]
     VmNotReady,
 

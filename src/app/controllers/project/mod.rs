@@ -5,4 +5,6 @@ pub mod edit_project_details;
 pub mod get_all_deployed_projects;
 pub mod get_all_github_app_installed_repos;
 pub mod get_project_details;
+pub mod get_project_traffic;
 pub mod job_completed;
+pub mod kill_vm_controller;

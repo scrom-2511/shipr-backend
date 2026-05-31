@@ -22,28 +22,30 @@ pub enum ProjectStatus {
 #[derive(Debug, FromRow, Deserialize, Serialize)]
 pub struct Project {
     pub id: i32,
-    pub name: String,
     pub project_id: String,
-
-    pub repo_id: i32,
 
     pub install_cmds: Option<Vec<String>>,
     pub run_cmds: Option<Vec<String>>,
     pub build_cmds: Option<Vec<String>>,
 
+    pub branch: Option<String>,
+    pub project_type: Option<String>,
+    pub full_name: String,
+
     pub dist_dir: String,
-    pub home_dir: String,
-    pub url: String,
+    pub root_dir: String,
+    pub url: Option<String>,
 
     pub user_id: i32,
 
-    pub commit_hash: String,
+    pub commit_hash: Option<String>,
+    pub envs: Option<Vec<String>>,
 
-    pub last_deployment_time: chrono::DateTime<chrono::Utc>,
-    pub status: ProjectStatus,
+    pub last_deployment_time: Option<chrono::DateTime<chrono::Utc>>,
+    pub status: String,
 
-    pub created_at: chrono::DateTime<chrono::Utc>,
-    pub updated_at: chrono::DateTime<chrono::Utc>,
+    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Debug, FromRow, Deserialize, Serialize)]

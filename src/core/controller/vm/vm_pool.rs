@@ -36,7 +36,7 @@ impl VmPool {
     ) -> Result<(), AppError> {
         let project_id = &format!("{}_{}", project_id, job_type);
 
-        let mut conn = self.redis.get_conn().await?;
+        let mut conn = self.redis.get_conn();
 
         let _: () = conn.set(project_id, vm_id).await?;
 
@@ -50,7 +50,7 @@ impl VmPool {
     ) -> Result<Option<u8>, AppError> {
         let project_id = &format!("{}_{}", project_id, job_type);
 
-        let mut conn = self.redis.get_conn().await?;
+        let mut conn = self.redis.get_conn();
 
         let vm_id = conn.get(project_id).await?;
 
@@ -65,7 +65,7 @@ impl VmPool {
         println!("Removing from pool: {}", project_id);
         let project_id = &format!("{}_{}", project_id, job_type);
 
-        let mut conn = self.redis.get_conn().await?;
+        let mut conn = self.redis.get_conn();
 
         let _: () = conn.del(project_id).await?;
 
@@ -73,7 +73,7 @@ impl VmPool {
     }
 
     pub async fn add_to_ideal_vms(&self, vm_id: u8) -> Result<(), AppError> {
-        let mut conn = self.redis.get_conn().await?;
+        let mut conn = self.redis.get_conn();
 
         let added: bool = conn.sadd(IDEAL_VMS_SEEN, vm_id).await?;
 
@@ -85,9 +85,13 @@ impl VmPool {
     }
 
     pub async fn get_from_ideal_vms(&self) -> Result<Option<u8>, AppError> {
-        let mut conn = self.redis.get_conn().await?;
+        let mut conn = self.redis.get_conn();
+
+        println!("Getting from ideal vms");
 
         let vm_id: Option<u8> = conn.lpop(IDEAL_VMS_QUEUE, None).await?;
+
+        println!("VM id from ideal vms: {:?}", vm_id);
 
         if let Some(id) = vm_id {
             let _: () = conn.srem(IDEAL_VMS_SEEN, id).await?;
@@ -99,9 +103,12 @@ impl VmPool {
     pub async fn get_or_create_vm(
         &self,
         project_id: &str,
-        job_type: JobType,
+        job_type: &JobType,
     ) -> Result<(Firecracker, bool), AppError> {
-        let something = self.get_from_pool(project_id, &job_type).await?;
+        println!("Getting or creating VM for project: {}", project_id);
+        let something = self.get_from_pool(project_id, job_type).await?;
+
+        println!("Something: {:?}", something);
 
         match something {
             Some(id) => {
@@ -111,10 +118,15 @@ impl VmPool {
                 Ok((vm, false))
             }
             None => {
-                let vm_id = self.get_from_ideal_vms().await?.ok_or_else(|| {
-                    AppError::QueueError("No ideal VMs available in pool".to_string())
-                })?;
+                let vm_id = self.get_from_ideal_vms().await?.unwrap();
+
+                println!("VM id2: {}", vm_id);
                 let new_vm = Firecracker::new_from_vm_id(vm_id);
+
+                println!("new_vm created");
+                self.add_to_pool(project_id, job_type, vm_id).await?;
+
+                println!("VM created: {}", vm_id);
 
                 Ok((new_vm, true))
             }

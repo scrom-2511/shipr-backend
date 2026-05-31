@@ -66,14 +66,14 @@ impl Firecracker {
         self.base_id
     }
 
-    fn init_vm(&mut self) -> Result<(), AppError> {
+    async fn init_vm(&mut self) -> Result<(), AppError> {
         let cmd_1 = format!(r#"sudo rm -f {}"#, self.api_socket);
         let cmd_2 = format!(
             r#"./firecracker --api-sock {} --enable-pci"#,
             self.api_socket
         );
 
-        run_script(vec![&cmd_1], get_dir())?;
+        run_script(vec![&cmd_1], get_dir()).await?;
 
         Command::new("bash")
             .arg("-c")
@@ -94,7 +94,7 @@ impl Firecracker {
         Ok(())
     }
 
-    fn setup_network(&self) -> Result<(), AppError> {
+    async fn setup_network(&self) -> Result<(), AppError> {
         let tap_dev = format!("tap{}", self.vm_id);
         let tap_ip = format!("172.16.0.{}", self.base_id + 1);
         let mask_short = "/30";
@@ -107,7 +107,7 @@ impl Firecracker {
         );
         let cmd_4 = format!(r#"sudo ip link set dev {} up"#, tap_dev);
 
-        run_script(vec![&cmd_1, &cmd_2, &cmd_3, &cmd_4], get_dir())?;
+        run_script(vec![&cmd_1, &cmd_2, &cmd_3, &cmd_4], get_dir()).await?;
 
         Ok(())
     }
@@ -151,7 +151,7 @@ impl Firecracker {
         let rootfs_path = "rootfs-nodejs.ext4".to_string();
         let copy_rootfs = format!(r#"cp {} rootfs-{}.ext4"#, rootfs_path, self.vm_id);
 
-        run_script(vec![&copy_rootfs], get_dir())?;
+        run_script(vec![&copy_rootfs], get_dir()).await?;
 
         let rootfs = format!("/home/scrom/rootfs-{}.ext4", self.vm_id);
 
@@ -215,14 +215,14 @@ impl Firecracker {
         Ok(())
     }
 
-    pub fn execute_command(&self, command: &str) -> Result<(), AppError> {
+    pub async fn execute_command(&self, command: &str) -> Result<(), AppError> {
         let cmd = format!(
             r#"ssh -i ubuntu.id_rsa root@172.16.0.{} 'bash -i -c "{}"'"#,
             self.base_id + 2,
             command
         );
 
-        run_script(vec![&cmd], get_dir())?;
+        run_script(vec![&cmd], get_dir()).await?;
 
         Ok(())
     }
@@ -243,27 +243,29 @@ impl Firecracker {
         self.execute_command(&format!(
             "ip route add default via 172.16.0.{} dev eth0",
             self.base_id + 1
-        ))?;
+        ))
+        .await?;
 
         println!("ip 172.16.0.{}", self.base_id + 1);
-        self.execute_command("echo 'nameserver 8.8.8.8' > /etc/resolv.conf")?;
+        self.execute_command("echo 'nameserver 8.8.8.8' > /etc/resolv.conf")
+            .await?;
 
         Ok(())
     }
 
     pub async fn destroy_vm(&self) -> Result<(), AppError> {
-        self.execute_command("reboot")?;
+        self.execute_command("reboot").await?;
         let cmd_1 = format!(r#"sudo ip link del tap{} 2> /dev/null || true"#, self.vm_id);
 
         let cmd_2 = format!(r#"rm rootfs-{}.ext4"#, self.vm_id);
 
-        run_script(vec![&cmd_1, &cmd_2], get_dir())?;
+        run_script(vec![&cmd_1, &cmd_2], get_dir()).await?;
 
         Ok(())
     }
 
     async fn all_setup(&mut self) -> Result<(), AppError> {
-        self.setup_network()?;
+        self.setup_network().await?;
 
         self.set_machine_config().await?;
 
@@ -279,9 +281,9 @@ impl Firecracker {
     }
 
     pub async fn create_vm(&mut self) -> Result<(), AppError> {
-        self.init_vm()?;
+        self.init_vm().await?;
         sleep(Duration::from_secs(3));
-        self.setup_network()?;
+        self.setup_network().await?;
         self.set_machine_config().await?;
         self.set_boot_source().await?;
         self.set_rootfs().await?;
@@ -294,10 +296,7 @@ impl Firecracker {
         Ok(())
     }
 
-    pub async fn create_new_vm_and_add_to_pool(
-        &mut self,
-        vm_pool: &VmPool,
-    ) -> Result<(), AppError> {
+    pub async fn create_hot_vm(&mut self, vm_pool: &VmPool) -> Result<(), AppError> {
         self.create_vm().await?;
         vm_pool.add_to_ideal_vms(self.vm_id).await?;
 

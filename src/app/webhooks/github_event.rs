@@ -1,11 +1,10 @@
-use actix_web::{HttpRequest, HttpResponse, web};
+use actix_web::{HttpRequest, web};
 
 use crate::{
     app::{
-        controllers::ApiResponse,
         db::DbPool,
         webhooks::{
-            github_installation::{self, GithubAppWebhookPayload, github_webhook_installation},
+            github_installation::{GithubAppWebhookPayload, github_webhook_installation},
             github_push::{GithubPushEvent, github_webhook_push},
         },
     },
@@ -18,7 +17,7 @@ pub async fn github_event(
     pool: web::Data<DbPool>,
     req: HttpRequest,
     redeploy_queue: web::Data<ReDeployQueue>,
-) -> Result<HttpResponse, AppError> {
+) -> Result<(), AppError> {
     println!("body: {:?}", body);
 
     let event_header = req
@@ -38,12 +37,6 @@ pub async fn github_event(
             let body = serde_json::from_slice::<GithubPushEvent>(&body).unwrap();
             Ok(github_webhook_push(web::Json(body), pool, redeploy_queue).await?)
         }
-        _ => {
-            return Ok(HttpResponse::Ok().json(ApiResponse::<()> {
-                success: true,
-                message: "Installation not created".to_string(),
-                data: None,
-            }));
-        }
+        _ => Ok(()),
     }
 }

@@ -1,7 +1,10 @@
 use reqwest::Client;
 use serde_json::json;
 
-use crate::{app_errors::AppError, core::app_types::{JobType, ProjectType}};
+use crate::{
+    app_errors::AppError,
+    core::app_types::{JobType, ProjectType},
+};
 
 pub struct Host {
     client: Client,
@@ -50,6 +53,7 @@ impl Host {
         job_type: JobType,
         commit_hash: Option<String>,
         project_type: ProjectType,
+        branch: Option<String>,
     ) -> Result<(), AppError> {
         self.client
             .post("https://francisco-unscholarlike-punctually.ngrok-free.dev/job-completed")
@@ -58,6 +62,7 @@ impl Host {
                 "job_type": job_type,
                 "commit_hash": commit_hash,
                 "project_type": project_type,
+                "branch": branch,
             }))
             .send()
             .await?;

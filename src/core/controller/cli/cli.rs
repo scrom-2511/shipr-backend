@@ -1,13 +1,14 @@
-
 use clap::{Parser, Subcommand};
+// // use jsonwebtoken::crypto::rust_crypto;
 
 use crate::{
+    app::db::DbPool,
     app_errors::AppError,
     core::{
         app_types::DeployReq,
         controller::{
             cli::{deploy::deploy, listen::listen, serve::serve},
-            storage::s3::S3Service,
+            storage::{redis::Redis, s3::S3Service},
             vm::{heartbeat_store::HeartbeatStore, id_allocator::IdAllocator, vm_pool::VmPool},
         },
     },
@@ -41,7 +42,7 @@ enum Commands {
         branch: String,
 
         #[arg(long)]
-        home_dir: String,
+        root_dir: String,
 
         #[arg(long)]
         dist_dir: String,
@@ -56,17 +57,28 @@ pub async fn cli(
     id_allocator: IdAllocator,
     s3_service: S3Service,
     heartbeat_store: HeartbeatStore,
+    pool: DbPool,
+    redis: Redis,
 ) -> Result<(), AppError> {
+
     let args = Cli::parse();
 
     match args.command {
         Commands::Listen => {
             println!("Starting listener...");
-            listen(id_allocator, vm_pool, s3_service, heartbeat_store).await?;
+            listen(id_allocator, vm_pool, s3_service, heartbeat_store, pool).await?;
         }
 
         Commands::Serve => {
-            serve(id_allocator, vm_pool, s3_service, heartbeat_store).await?;
+            serve(
+                id_allocator,
+                vm_pool,
+                s3_service,
+                heartbeat_store,
+                pool,
+                redis,
+            )
+            .await?;
         }
 
         Commands::Deploy {
@@ -76,18 +88,19 @@ pub async fn cli(
             run,
             branch,
             dist_dir,
-            home_dir,
+            root_dir,
         } => {
             let deploy_req = DeployReq {
-                branch: Some(branch),
-                build: Some(build),
-                run: Some(run),
+                branch,
+                build_cmds: build,
+                run_cmds: run,
                 dist_dir,
-                home_dir,
-                install: Some(install),
+                root_dir,
+                install_cmds: install,
                 full_name: "test".to_string(),
                 installation_id: 1,
-                name: "test".to_string(),
+                project_id: "test".to_string(),
+                envs: vec![],
             };
 
             deploy(deploy_req).await?;

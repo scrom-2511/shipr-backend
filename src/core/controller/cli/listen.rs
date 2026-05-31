@@ -28,11 +28,14 @@ use crate::{
     },
 };
 
+use crate::app::db::DbPool;
+
 pub async fn listen(
     id_allocator: IdAllocator,
     vm_pool: VmPool,
     s3_service: S3Service,
     heartbeat_store: HeartbeatStore,
+    pool: DbPool,
 ) -> Result<(), AppError> {
     let logs_store: LogsStore =
         web::Data::new(Mutex::new(HashMap::<String, Sender<String>>::new()));
@@ -42,11 +45,12 @@ pub async fn listen(
         s3_service.clone(),
         id_allocator.clone(),
         heartbeat_store.clone(),
+        pool.clone(),
     );
 
     for _ in 0..1 {
         let mut new_vm = Firecracker::new_from_id_allocator(&id_allocator).await;
-        new_vm.create_new_vm_and_add_to_pool(&vm_pool).await?;
+        new_vm.create_hot_vm(&vm_pool).await?;
     }
 
     let lapin_conn = Lapin::new().await?;
@@ -82,6 +86,7 @@ pub async fn listen(
         let redeploy_queue = redeploy_queue.clone();
         let job_dispatcher = job_dispatcher.clone();
         let s3_service = s3_service.clone();
+        let pool_data = web::Data::new(pool.clone());
 
         tokio::spawn(async move {
             listen_redeploy(
@@ -90,6 +95,7 @@ pub async fn listen(
                 id_allocator,
                 vm_pool,
                 redeploy_queue,
+                pool_data,
             )
             .await;
         });

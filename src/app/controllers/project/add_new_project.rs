@@ -22,7 +22,7 @@ pub struct AddProjectRequest {
     pub dist_dir: String,
 
     #[validate(length(min = 1, message = "Home directory is required"))]
-    pub home_dir: String,
+    pub root_dir: String,
 
     #[validate(length(min = 1, message = "URL is required"))]
     pub url: String,
@@ -47,22 +47,22 @@ pub async fn add_new_project(
 
     let query = r#"
         INSERT INTO projects (
-            name, description, slug, install_cmds, run_cmds,
-            build_cmds, dist_dir, home_dir, url, user_id
+            full_name, project_id, install_cmds, run_cmds,
+            build_cmds, dist_dir, root_dir, url, user_id, status
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     "#;
 
     let result = sqlx::query(query)
         .bind(&project.name)
-        .bind(&project.description)
         .bind(&project.slug)
         .bind(&project.install_cmds)
         .bind(&project.run_cmds)
         .bind(&project.build_cmds)
         .bind(&project.dist_dir)
-        .bind(&project.home_dir)
+        .bind(&project.root_dir)
         .bind(&project.url)
         .bind(project.user_id)
+        .bind("active")
         .execute(pool.as_ref())
         .await;
 

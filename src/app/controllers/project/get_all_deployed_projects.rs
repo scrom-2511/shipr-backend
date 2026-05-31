@@ -8,11 +8,21 @@ use chrono::NaiveDateTime;
 use serde::Serialize;
 use sqlx::FromRow;
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, FromRow)]
+struct DeployedProjectRow {
+    id: i32,
+    project_id: String,
+    branch: Option<String>,
+    full_name: String,
+    status: String,
+    last_deployment_time: Option<NaiveDateTime>,
+}
+
+#[derive(Debug, Serialize)]
 struct DeployedProject {
     id: i32,
+    project_id: String,
     branch: String,
-    name: String,
     full_name: String,
     status: String,
     last_deployment_time: NaiveDateTime,
@@ -36,8 +46,8 @@ pub async fn get_all_deployed_projects_controller(
     let query = r#"
     SELECT
         id,
+        project_id,
         branch,
-        name,
         full_name,
         status,
         last_deployment_time
@@ -46,11 +56,28 @@ pub async fn get_all_deployed_projects_controller(
     ORDER BY created_at DESC
     "#;
 
-    let projects: Vec<DeployedProject> = sqlx::query_as(query)
+    let rows: Vec<DeployedProjectRow> = sqlx::query_as(query)
         .bind(user_id)
         .fetch_all(pool.as_ref())
         .await
-        .map_err(|e| AppError::Database(e.to_string()))?;
+        .map_err(|e| {
+            println!("Database error in get_all_deployed_projects: {}", e);
+            AppError::Database(e.to_string())
+        })?;
+
+    let projects: Vec<DeployedProject> = rows
+        .into_iter()
+        .map(|row| DeployedProject {
+            id: row.id,
+            project_id: row.project_id,
+            branch: row.branch.unwrap_or_default(),
+            full_name: row.full_name,
+            status: row.status,
+            last_deployment_time: row
+                .last_deployment_time
+                .unwrap_or_else(|| chrono::Utc::now().naive_utc()),
+        })
+        .collect();
 
     Ok(HttpResponse::Ok().json(ApiResponse {
         success: true,
