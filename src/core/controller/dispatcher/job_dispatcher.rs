@@ -13,9 +13,7 @@ use crate::core::controller::vm::firecracker::Firecracker;
 use crate::core::controller::vm::heartbeat_store::HeartbeatStore;
 use crate::core::controller::vm::id_allocator::IdAllocator;
 use crate::core::controller::vm::vm_pool::VmPool;
-use crate::core::infra::kill_vm::kill_vm;
 use crate::core::infra::process::run_script;
-use std::collections::HashMap;
 
 impl fmt::Display for JobType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -189,7 +187,7 @@ impl JobDispatcher {
     }
 
     pub async fn dispatch_redeploy_job(
-        &mut self,
+        &self,
         redeploy_details: &mut RedeployDetails,
     ) -> Result<(), AppError> {
         let (vm, _) = self
@@ -240,7 +238,7 @@ impl JobDispatcher {
         Ok(())
     }
 
-    pub async fn dispatch_run_job(&mut self, project_id: &str) -> Result<(), AppError> {
+    pub async fn dispatch_run_job(&self, project_id: &str) -> Result<String, AppError> {
         let (vm, is_new) = self
             .vm_pool
             .get_or_create_vm(project_id, &JobType::Run)
@@ -268,12 +266,13 @@ impl JobDispatcher {
                 .get_presigned_download_url(project_id)
                 .await?;
 
-            let row: (Option<Vec<String>>, Option<Vec<String>>) =
-                sqlx::query_as("SELECT envs, run_cmds FROM projects WHERE project_id = $1")
-                    .bind(project_id)
-                    .fetch_one(&self.pool)
-                    .await
-                    .map_err(|e| AppError::Database(e.to_string()))?;
+            let row: (Option<Vec<String>>, Option<Vec<String>>, Option<String>) = sqlx::query_as(
+                "SELECT envs, run_cmds, dist_dir FROM projects WHERE project_id = $1",
+            )
+            .bind(project_id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
 
             let envs: Option<Vec<EnvVar>> = match row.0 {
                 Some(encrypted_envs_vec) => {
@@ -289,13 +288,14 @@ impl JobDispatcher {
                 None => None,
             };
 
-            let run_command = row.1.map(|cmds| cmds.join(" && ")).unwrap_or_default();
+            let run_command = row.1.unwrap();
 
             let run_details = RunDetails {
                 presigned_download_url,
                 run_command,
                 project_id: project_id.to_string(),
                 envs,
+                dist_dir: row.2.unwrap(),
             };
 
             self.move_json_to_vm(&vm, &run_details).await?;
@@ -327,6 +327,6 @@ impl JobDispatcher {
             });
         }
 
-        Ok(())
+        Ok(vm_ip)
     }
 }

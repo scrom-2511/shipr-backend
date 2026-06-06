@@ -26,7 +26,7 @@ pub struct DeployReq {
     pub installation_id: u64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct DeployDetails {
     pub branch: Option<String>,
     pub install_commands: Option<Vec<String>>,
@@ -38,6 +38,7 @@ pub struct DeployDetails {
     pub presigned_upload_url: String,
     pub installation_access_token: String,
     pub envs: Option<Vec<EnvVar>>,
+    pub project_type: Option<ProjectType>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -54,9 +55,10 @@ pub struct RedeployDetails {
 #[derive(Serialize, Deserialize)]
 pub struct RunDetails {
     pub presigned_download_url: String,
-    pub run_command: String,
+    pub run_command: Vec<String>,
     pub project_id: String,
     pub envs: Option<Vec<EnvVar>>,
+    pub dist_dir: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

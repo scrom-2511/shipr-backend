@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Duration};
+use std::time::Duration;
 
 use actix_web::web;
 
@@ -67,6 +67,7 @@ pub async fn listen_deploy(
             installation_access_token: access_token,
             envs: Some(deploy_details_req.envs),
             project_id,
+            project_type: None,
         };
 
         let id_allocator = id_allocator.clone();

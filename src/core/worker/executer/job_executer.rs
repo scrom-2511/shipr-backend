@@ -1,19 +1,16 @@
-use std::{fs, net::UdpSocket, thread::sleep, time::Duration};
-
-use tokio::net::TcpStream;
+use std::fs;
 
 use crate::{
     app_errors::AppError,
     core::{
         app_types::{DeployDetails, JobType, ProjectType, RedeployDetails, RunDetails},
-        config::{app_config::get_worker_dir, project_default_config::get_default_config},
-        infra::{
-            detect::detect_project_type,
-            process::{run_script, run_script_bg},
+        config::app_config::get_worker_dir,
+        infra::{detect::detect_project_type, process::run_script},
+        worker::{
+            api::host::Host,
+            helpers::{build::build, install::install, pull::pull, run::run},
         },
-        worker::api::host::Host,
     },
-    shared::github_app::GithubApp,
 };
 
 pub struct JobExecuter {
@@ -29,16 +26,6 @@ impl Default for JobExecuter {
 impl JobExecuter {
     pub fn new() -> Self {
         Self { host: Host::new() }
-    }
-
-    fn extract_repo_name(&self, url: &str) -> Result<String, AppError> {
-        let url = url.trim();
-
-        let last_part = url.split('/').next_back().ok_or(AppError::InvalidGitUrl)?;
-
-        let repo_name = last_part.strip_suffix(".git").unwrap_or(last_part);
-
-        Ok(repo_name.to_string())
     }
 
     fn get_env_export_cmd(&self, envs: &Option<Vec<crate::core::app_types::EnvVar>>) -> String {
@@ -67,211 +54,8 @@ impl JobExecuter {
         }
     }
 
-    async fn pull(
-        &self,
-        deploy_details: &DeployDetails,
-        commit_hash: Option<String>,
-    ) -> Result<(String, Option<String>), AppError> {
-        let github_app = GithubApp::new();
-
-        // self.host
-        //     .send_logs(&deploy_details.project_id, "Pulling repository...")
-        //     .await?;
-
-        let (owner, repo) = {
-            let parts: Vec<&str> = deploy_details.full_name.split('/').collect();
-            (parts[0].to_string(), parts[1].to_string())
-        };
-
-        println!("owner is: {}", owner);
-        println!("repo is: {}", repo);
-
-        let (commit_hash, branch) = if commit_hash.is_none() {
-            github_app
-                .get_commit_sha(
-                    deploy_details.branch.clone(),
-                    &owner,
-                    &repo,
-                    &deploy_details.installation_access_token,
-                )
-                .await?
-        } else {
-            (commit_hash.unwrap(), deploy_details.branch.clone().unwrap())
-        };
-
-        let tarball_url = github_app
-            .get_tarball_url_from_commit_hash(&commit_hash, &owner, &repo)
-            .await?;
-        println!("tarball url is: {}", tarball_url);
-
-        let git_pull_cmd = format!(
-            "curl -Lo {}.tar.gz {} -H 'Accept: application/vnd.github.v3+json' -H 'Authorization: token {}'",
-            deploy_details.project_id, tarball_url, deploy_details.installation_access_token
-        );
-
-        println!("git clone command is: {}", git_pull_cmd);
-
-        let extract_cmd = format!("tar -xzf {}.tar.gz", deploy_details.project_id);
-
-        self.host
-            .send_logs(&deploy_details.project_id, "Extracting repository...")
-            .await?;
-
-        println!("extract command is: {}", extract_cmd);
-
-        let rename_cmd = format!(
-            "mv {}-* {}",
-            deploy_details.full_name.replace("/", "-"),
-            deploy_details.project_id
-        );
-
-        println!("rename command is: {}", rename_cmd);
-
-        run_script(
-            vec![&git_pull_cmd, &extract_cmd, &rename_cmd],
-            get_worker_dir(),
-        )
-        .await?;
-
-        Ok((commit_hash, Some(branch)))
-    }
-
-    async fn install(&self, deploy_details: &DeployDetails) -> Result<(), AppError> {
-        let project_path = self.get_project_path(deploy_details)?;
-
-        println!("project path is: {}", project_path);
-
-        self.host
-            .send_logs(&deploy_details.project_id, "Installing dependencies...")
-            .await?;
-
-        if deploy_details.install_commands.is_some() {
-            self.host
-                .send_logs(
-                    &deploy_details.project_id,
-                    "Found custom install commands, using them...",
-                )
-                .await?;
-            let install_cmd = deploy_details
-                .install_commands
-                .as_ref()
-                .unwrap()
-                .join(" && ");
-
-            let env_exports = self.get_env_export_cmd(&deploy_details.envs);
-            let final_cmd = format!("cd {} && {} {}", project_path, env_exports, install_cmd);
-
-            run_script(vec![&final_cmd], get_worker_dir()).await?;
-        } else {
-            self.host
-                .send_logs(
-                    &deploy_details.project_id,
-                    "No custom install commands found, using default install commands...",
-                )
-                .await?;
-
-            let project_type = detect_project_type(&project_path);
-
-            self.host
-                .send_logs(
-                    &deploy_details.project_id,
-                    &format!("Detected project type: {}", project_type),
-                )
-                .await?;
-
-            let config = get_default_config(project_type);
-
-            let env_exports = self.get_env_export_cmd(&deploy_details.envs);
-            let final_cmd = format!(
-                "cd {} && {} {}",
-                project_path,
-                env_exports,
-                config.install_commands.join(" && ")
-            );
-
-            println!("final command is: {}", final_cmd);
-            run_script(vec![&final_cmd], get_worker_dir()).await?;
-        }
-
-        self.host
-            .send_logs(
-                &deploy_details.project_id,
-                "Dependencies installed successfully",
-            )
-            .await?;
-
-        Ok(())
-    }
-
-    async fn build(&self, deploy_details: &DeployDetails) -> Result<(), AppError> {
-        let project_path = self.get_project_path(deploy_details)?;
-
-        self.host
-            .send_logs(&deploy_details.project_id, "Building project...")
-            .await?;
-
-        if deploy_details.build_commands.is_some() {
-            self.host
-                .send_logs(
-                    &deploy_details.project_id,
-                    "Found custom build commands, using them...",
-                )
-                .await?;
-            let build_cmd = deploy_details.build_commands.as_ref().unwrap().join(" && ");
-
-            let env_exports = self.get_env_export_cmd(&deploy_details.envs);
-            let final_cmd = format!("cd {} && {} {}", project_path, env_exports, build_cmd);
-
-            run_script(vec![&final_cmd], get_worker_dir()).await?;
-        } else {
-            self.host
-                .send_logs(
-                    &deploy_details.project_id,
-                    "No custom build commands found, using default build commands...",
-                )
-                .await?;
-
-            let project_type = detect_project_type(&project_path);
-            let config = get_default_config(project_type);
-
-            let env_exports = self.get_env_export_cmd(&deploy_details.envs);
-            let final_cmd = format!(
-                "cd {} && {} {}",
-                project_path,
-                env_exports,
-                config.build_commands.join(" && ")
-            );
-
-            println!("final command is: {}", final_cmd);
-
-            run_script(vec![&final_cmd], get_worker_dir()).await?;
-        }
-
-        let zip_cmd = format!(
-            "cd /root/{}/{} && zip -r /root/{}.zip . /root/job.json",
-            deploy_details.project_id, deploy_details.dist_dir, deploy_details.project_id
-        );
-
-        println!("zip command is: {}", zip_cmd);
-
-        run_script(vec![&zip_cmd], get_worker_dir()).await?;
-
-        // For dev
-        let presigned_upload_url = deploy_details.presigned_upload_url.to_owned().replace(
-            "https://francisco-unscholarlike-punctually.ngrok-free.dev/",
-            "https://francisco-unscholarlike-punctually.ngrok-free.dev/s3/",
-        );
-
-        let upload_cmd = format!(
-            "curl -X PUT -T {}.zip '{}'",
-            deploy_details.project_id, presigned_upload_url
-        );
-
-        run_script(vec![&upload_cmd], get_worker_dir()).await?;
-
-        // self.host
-        //     .send_logs(&deploy_details.project_id, "Build completed successfully")
-        //     .await?;
+    pub async fn run(&self, run_details: &RunDetails) -> Result<(), AppError> {
+        run(run_details).await?;
 
         Ok(())
     }
@@ -284,13 +68,13 @@ impl JobExecuter {
     ) -> Result<(), AppError> {
         let steps_result = async {
             let (commit_hash, branch) = if job_type == JobType::Deploy {
-                self.pull(deploy_details, None).await?
+                pull(deploy_details, None).await?
             } else {
-                self.pull(deploy_details, commit_hash).await?
+                pull(deploy_details, commit_hash).await?
             };
 
-            self.install(deploy_details).await?;
-            self.build(deploy_details).await?;
+            install(deploy_details).await?;
+            build(deploy_details).await?;
 
             let project_path = self.get_project_path(deploy_details)?;
             let p_type = detect_project_type(&project_path);
@@ -323,7 +107,6 @@ impl JobExecuter {
             }
             Err(e) => {
                 println!("Job execution failed: {:?}", e);
-                // Ensure VM is killed even on failure to avoid resource leaks
                 let _ = self
                     .host
                     .kill_vm(deploy_details.project_id.to_owned(), job_type)
@@ -331,69 +114,6 @@ impl JobExecuter {
                 Err(e)
             }
         }
-    }
-
-    pub async fn run(&self, run_details: &RunDetails) -> Result<(), AppError> {
-        let socket = UdpSocket::bind("0.0.0.0:0")?;
-
-        socket.connect("8.8.8.8:80")?;
-
-        let local_ip = socket.local_addr()?.ip();
-
-        let port_exists = TcpStream::connect(format!("{}:3000", local_ip))
-            .await
-            .is_ok();
-
-        println!("port exists is: {}", port_exists);
-
-        if port_exists {
-            return Ok(());
-        }
-
-        let project_id = &run_details.project_id;
-
-        // For dev
-        let presigned_download_url = run_details.presigned_download_url.to_owned().replace(
-            "https://francisco-unscholarlike-punctually.ngrok-free.dev/",
-            "https://francisco-unscholarlike-punctually.ngrok-free.dev/s3/",
-        );
-
-        let download_cmd = format!("curl -o {}.zip '{}'", project_id, presigned_download_url);
-
-        run_script(vec![&download_cmd], get_worker_dir()).await?;
-
-        let unzip_cmd = format!("unzip {}.zip -d /root/{}", project_id, project_id);
-
-        run_script(vec![&unzip_cmd], get_worker_dir()).await?;
-
-        sleep(Duration::from_secs(3));
-
-        let project_path = format!("/root/{}", project_id);
-
-        let project_type = detect_project_type(&project_path);
-
-        if !run_details.run_command.is_empty() {
-            let env_exports = self.get_env_export_cmd(&run_details.envs);
-            let run_cmd = format!(
-                "cd {} && {} {}",
-                project_path, env_exports, run_details.run_command
-            );
-
-            run_script_bg(vec![&run_cmd], get_worker_dir())?;
-
-            return Ok(());
-        }
-
-        let config = get_default_config(project_type);
-        let config_run_cmd = config.run_command.unwrap();
-
-        let env_exports = self.get_env_export_cmd(&run_details.envs);
-        let final_cmd = format!("cd {} && {} {}", project_path, env_exports, config_run_cmd);
-
-        run_script_bg(vec![&final_cmd], get_worker_dir())?;
-
-        println!("Run command completed");
-        Ok(())
     }
 
     pub async fn redeploy(
@@ -441,7 +161,6 @@ impl JobExecuter {
 
         println!("job json is: ");
 
-        // For dev
         let presigned_upload_url = redeploy_details.presigned_upload_url.to_owned();
 
         println!("presigned upload url is: {}", presigned_upload_url);
@@ -461,6 +180,12 @@ impl JobExecuter {
         run_script(vec![&rm_previous_project], get_worker_dir()).await?;
 
         let commit_hash = redeploy_details.commit_hash.clone();
+
+        fs::write("/root/job.json", serde_json::to_string(&job_json)?)?;
+
+        let rm_previous_project = format!("rm -rf /root/{}*", project_id);
+
+        run_script(vec![&rm_previous_project], get_worker_dir()).await?;
 
         self.execute(&job_json, job_type, Some(commit_hash)).await?;
 

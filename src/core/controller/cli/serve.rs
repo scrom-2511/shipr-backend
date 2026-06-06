@@ -54,12 +54,9 @@ pub async fn serve(
 
     println!("Starting server");
 
-    let vm_pool_dns = vm_pool.clone();
-    tokio::spawn(async move {
-        if let Err(e) = crate::dns::server::start_dns_server(vm_pool_dns).await {
-            eprintln!("DNS Server error: {}", e);
-        }
-    });
+    // let dns = ShiprDNS::new(vm_pool);
+
+    // dns.start().await?;
 
     HttpServer::new(move || {
         App::new()

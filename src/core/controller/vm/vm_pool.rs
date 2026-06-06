@@ -84,7 +84,7 @@ impl VmPool {
         Ok(())
     }
 
-    pub async fn get_from_ideal_vms(&self) -> Result<Option<u8>, AppError> {
+    pub async fn get_hot_vm(&self) -> Result<Option<u8>, AppError> {
         let mut conn = self.redis.get_conn();
 
         println!("Getting from ideal vms");
@@ -118,7 +118,7 @@ impl VmPool {
                 Ok((vm, false))
             }
             None => {
-                let vm_id = self.get_from_ideal_vms().await?.unwrap();
+                let vm_id = self.get_hot_vm().await?.unwrap();
 
                 println!("VM id2: {}", vm_id);
                 let new_vm = Firecracker::new_from_vm_id(vm_id);

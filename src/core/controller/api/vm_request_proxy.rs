@@ -55,6 +55,8 @@ impl VmRequestProxy {
 
         let name = host.split(".").next().unwrap().to_owned();
 
+        println!("name is: {}", name);
+
         let mut conn = self.redis.get_conn();
 
         let cache_key = format!("project_name_to_id_v2:{}", name);

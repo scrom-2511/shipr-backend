@@ -18,7 +18,7 @@ use crate::{
 
 pub async fn listen_redeploy(
     s3_service: S3Service,
-    mut job_dispatcher: JobDispatcher,
+    job_dispatcher: JobDispatcher,
     id_allocator: IdAllocator,
     vm_pool: VmPool,
     redeploy_queue: web::Data<ReDeployQueue>,
@@ -82,35 +82,53 @@ pub async fn listen_redeploy(
                 continue;
             }
 
+            // println!("Triggering redeploy for project: {}", project.project_id);
+
+            // let project_id = &project.project_id;
+            // let github = GithubApp::new();
+
+            // let presigned_upload_url = match s3_service.get_presigned_upload_url(project_id).await {
+            //     Ok(url) => url,
+            //     Err(e) => {
+            //         eprintln!("Failed to get presigned upload url: {:?}", e);
+            //         continue;
+            //     }
+            // };
+
+            // let presigned_download_url =
+            //     match s3_service.get_presigned_download_url(project_id).await {
+            //         Ok(url) => url,
+            //         Err(e) => {
+            //             eprintln!("Failed to get presigned download url: {:?}", e);
+            //             continue;
+            //         }
+            //     };
+
+            // let access_token = match github
+            //     .get_installation_access_token(redeploy_event.installation.id)
+            //     .await
+            // {
+            //     Ok(token) => token,
+            //     Err(e) => {
+            //         eprintln!("Failed to get installation access token: {:?}", e);
+            //         continue;
+            //     }
+            // };
+
             println!("Triggering redeploy for project: {}", project.project_id);
 
             let project_id = &project.project_id;
             let github = GithubApp::new();
 
-            let presigned_upload_url = match s3_service.get_presigned_upload_url(project_id).await {
-                Ok(url) => url,
+            // Run all three independent async calls concurrently
+            let (presigned_upload_url, presigned_download_url, access_token) = match tokio::try_join!(
+                s3_service.get_presigned_upload_url(project_id),
+                s3_service.get_presigned_download_url(project_id),
+                github.get_installation_access_token(redeploy_event.installation.id),
+            ) {
+                Ok(results) => results,
                 Err(e) => {
-                    eprintln!("Failed to get presigned upload url: {:?}", e);
-                    continue;
-                }
-            };
-
-            let presigned_download_url =
-                match s3_service.get_presigned_download_url(project_id).await {
-                    Ok(url) => url,
-                    Err(e) => {
-                        eprintln!("Failed to get presigned download url: {:?}", e);
-                        continue;
-                    }
-                };
-
-            let access_token = match github
-                .get_installation_access_token(redeploy_event.installation.id)
-                .await
-            {
-                Ok(token) => token,
-                Err(e) => {
-                    eprintln!("Failed to get installation access token: {:?}", e);
+                    eprintln!("Failed during concurrent setup: {:?}", e);
                     continue;
                 }
             };
@@ -136,22 +154,39 @@ pub async fn listen_redeploy(
                 envs,
             };
 
-            let id_allocator = id_allocator.clone();
-            let vm_pool = vm_pool.clone();
+            // let id_allocator = id_allocator.clone();
+            // let vm_pool = vm_pool.clone();
 
-            tokio::task::spawn(async move {
-                let mut new_vm = Firecracker::new_from_id_allocator(&id_allocator).await;
-                if let Err(e) = new_vm.create_hot_vm(&vm_pool).await {
-                    eprintln!("Failed to create VM: {:?}", e);
-                }
-            });
+            // tokio::task::spawn(async move {
+            //     let mut new_vm = Firecracker::new_from_id_allocator(&id_allocator).await;
+            //     if let Err(e) = new_vm.create_hot_vm(&vm_pool).await {
+            //         eprintln!("Failed to create VM: {:?}", e);
+            //     }
+            // });
+
+            // if let Err(e) = job_dispatcher
+            //     .dispatch_redeploy_job(&mut redeploy_details)
+            //     .await
+            // {
+            //     eprintln!("Job dispatch failed: {:?}", e);
+            // }
 
             if let Err(e) = job_dispatcher
                 .dispatch_redeploy_job(&mut redeploy_details)
                 .await
             {
                 eprintln!("Job dispatch failed: {:?}", e);
+                continue;
             }
+
+            let id_allocator = id_allocator.clone();
+            let vm_pool = vm_pool.clone();
+            tokio::task::spawn(async move {
+                let mut new_vm = Firecracker::new_from_id_allocator(&id_allocator).await;
+                if let Err(e) = new_vm.create_hot_vm(&vm_pool).await {
+                    eprintln!("Failed to create VM: {:?}", e);
+                }
+            });
         }
     }
 }
