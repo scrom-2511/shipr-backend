@@ -4,11 +4,7 @@ pub struct ProjectDefaultConfig {
     pub install_commands: Vec<&'static str>,
     pub build_commands: Vec<&'static str>,
     pub run_command: Option<Vec<&'static str>>,
-
-    pub install_on_run: bool,
-
     pub deploy_artifacts: Vec<&'static str>,
-
     pub dist_dir: &'static str,
     pub root_dir: &'static str,
 }
@@ -18,11 +14,7 @@ pub fn node_default_config() -> ProjectDefaultConfig {
         install_commands: vec!["npm install"],
         build_commands: vec!["npx tsc"],
         run_command: Some(vec!["node", "index.js"]),
-
         deploy_artifacts: vec!["dist", "package.json", "package-lock.json"],
-
-        install_on_run: true,
-
         dist_dir: "dist",
         root_dir: ".",
     }
@@ -33,11 +25,7 @@ pub fn react_default_config() -> ProjectDefaultConfig {
         install_commands: vec!["npm install"],
         build_commands: vec!["npm run build"],
         run_command: None,
-
         deploy_artifacts: vec!["dist"],
-
-        install_on_run: false,
-
         dist_dir: "dist",
         root_dir: ".",
     }
@@ -48,11 +36,7 @@ pub fn html_default_config() -> ProjectDefaultConfig {
         install_commands: vec![],
         build_commands: vec![],
         run_command: Some(vec!["npx", "serve", "."]),
-
         deploy_artifacts: vec!["."],
-
-        install_on_run: false,
-
         dist_dir: ".",
         root_dir: ".",
     }
