@@ -41,11 +41,11 @@ pub struct Project {
     pub commit_hash: Option<String>,
     pub envs: Option<Vec<String>>,
 
-    pub last_deployment_time: Option<chrono::DateTime<chrono::Utc>>,
+    pub last_deployment_time: Option<NaiveDateTime>,
     pub status: String,
 
-    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub created_at: Option<NaiveDateTime>,
+    pub updated_at: Option<NaiveDateTime>,
 }
 
 #[derive(Debug, FromRow, Deserialize, Serialize)]

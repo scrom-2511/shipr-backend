@@ -60,7 +60,6 @@ pub async fn cli(
     pool: DbPool,
     redis: Redis,
 ) -> Result<(), AppError> {
-
     let args = Cli::parse();
 
     match args.command {
@@ -92,11 +91,7 @@ pub async fn cli(
         } => {
             let deploy_req = DeployReq {
                 branch,
-                build_cmds: build,
-                run_cmds: run,
-                dist_dir,
                 root_dir,
-                install_cmds: install,
                 full_name: "test".to_string(),
                 installation_id: 1,
                 project_id: "test".to_string(),

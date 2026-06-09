@@ -73,21 +73,17 @@ pub async fn deploy_project_controller(
         crate::shared::crypto::Crypto::encrypt(&json)
     }];
 
-    let query = "INSERT INTO projects (project_id, status, full_name, dist_dir, root_dir, user_id, last_deployment_time, created_at, updated_at, install_cmds, build_cmds, run_cmds, branch, envs) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)";
+    let query = "INSERT INTO projects (project_id, status, root_dir, full_name, user_id, last_deployment_time, created_at, updated_at, branch, envs) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)";
 
     sqlx::query(query)
         .bind(&body.project_id)
         .bind("deploying")
-        .bind(&body.full_name)
-        .bind(&body.dist_dir)
         .bind(&body.root_dir)
+        .bind(&body.full_name)
         .bind(user_id)
         .bind(chrono::Utc::now())
         .bind(chrono::Utc::now())
         .bind(chrono::Utc::now())
-        .bind(&body.install_cmds)
-        .bind(&body.build_cmds)
-        .bind(&body.run_cmds)
         .bind(&body.branch)
         .bind(envs)
         .execute(pool.as_ref())

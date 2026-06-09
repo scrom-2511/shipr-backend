@@ -10,6 +10,7 @@ use shipr::app::controllers::github::get_state::get_state;
 use shipr::app::controllers::github::update_userid_github_app_installations::update_userid_github_app_installations;
 use shipr::app::controllers::project::add_new_project::add_new_project;
 use shipr::app::controllers::project::check_name_availability::check_repo_name_availability;
+use shipr::app::controllers::project::delete_project::delete_project_controller;
 use shipr::app::controllers::project::deploy_project::deploy_project_controller;
 use shipr::app::controllers::project::get_all_deployed_projects::get_all_deployed_projects_controller;
 use shipr::app::controllers::project::get_all_github_app_installed_repos::get_all_github_app_installed_repos;
@@ -122,7 +123,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     HttpServer::new(move || {
         let cors = actix_cors::Cors::default()
-            .allowed_origin("https://cooling-board-victor-parents.trycloudflare.com")
+            .allowed_origin("https://flux-analytical-sheffield-journalists.trycloudflare.com")
             .allowed_origin("http://localhost:5173")
             .allow_any_method()
             .allow_any_header()
@@ -172,6 +173,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     .route(
                         "/get-project-traffic",
                         web::get().to(get_project_traffic_controller),
+                    )
+                    .route(
+                        "/delete-project",
+                        web::delete().to(delete_project_controller),
                     ),
             )
     })

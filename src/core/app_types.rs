@@ -15,30 +15,31 @@ pub struct EnvVar {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DeployReq {
     pub project_id: String,
-    pub install_cmds: Vec<String>,
-    pub build_cmds: Vec<String>,
-    pub run_cmds: Vec<String>,
     pub envs: Vec<EnvVar>,
     pub branch: String,
-    pub dist_dir: String,
     pub root_dir: String,
     pub full_name: String,
     pub installation_id: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct DeployDetails {
-    pub branch: Option<String>,
+pub struct ShiprJson {
     pub install_commands: Option<Vec<String>>,
     pub build_commands: Option<Vec<String>>,
+    pub run_commands: Option<Vec<String>>,
+    pub include: Option<Vec<String>>,
+    pub exclude: Option<Vec<String>>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct DeployDetails {
+    pub root_dir: String,
+    pub branch: Option<String>,
     pub full_name: String,
     pub project_id: String,
-    pub root_dir: String,
-    pub dist_dir: String,
     pub presigned_upload_url: String,
     pub installation_access_token: String,
     pub envs: Option<Vec<EnvVar>>,
-    pub project_type: Option<ProjectType>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -55,10 +56,8 @@ pub struct RedeployDetails {
 #[derive(Serialize, Deserialize)]
 pub struct RunDetails {
     pub presigned_download_url: String,
-    pub run_command: Vec<String>,
     pub project_id: String,
     pub envs: Option<Vec<EnvVar>>,
-    pub dist_dir: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -74,6 +73,7 @@ pub enum ProjectType {
     Rust,
     React,
     Node,
+    Next,
     Unknown,
 }
 
@@ -84,6 +84,7 @@ impl fmt::Display for ProjectType {
             ProjectType::Rust => "rust",
             ProjectType::React => "react",
             ProjectType::Node => "node",
+            ProjectType::Next => "next",
             ProjectType::Unknown => "unknown",
         };
         write!(f, "{}", s)

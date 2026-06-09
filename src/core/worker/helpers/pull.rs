@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::{
     app_errors::AppError,
     core::{
@@ -9,14 +11,16 @@ use crate::{
 pub async fn pull(
     deploy_details: &DeployDetails,
     commit_hash: Option<String>,
-) -> Result<(String, Option<String>), AppError> {
+) -> Result<(bool, String, Option<String>), AppError> {
     let (commit_hash, branch) = download_repo(deploy_details, commit_hash).await?;
 
     extract_project(deploy_details).await?;
 
     rename_project(deploy_details).await?;
 
-    Ok((commit_hash, Some(branch)))
+    let shipr_json_exists = move_shipr_json_to_root(deploy_details).await?;
+
+    Ok((shipr_json_exists, commit_hash, Some(branch)))
 }
 
 async fn download_repo(
@@ -82,4 +86,26 @@ async fn rename_project(deploy_details: &DeployDetails) -> Result<(), AppError> 
     run_script(vec![&rename_cmd], get_worker_dir()).await?;
 
     Ok(())
+}
+
+async fn move_shipr_json_to_root(deploy_details: &DeployDetails) -> Result<bool, AppError> {
+    let root_dir = deploy_details.root_dir.replace("/", "");
+    let shipr_json_path = format!(
+        "/root/{}/{}/shipr.json",
+        deploy_details.project_id, root_dir
+    );
+
+    let path_exists = PathBuf::from(&shipr_json_path).exists();
+
+    if !path_exists {
+        return Ok(false);
+    }
+
+    let copy_shipr_json = format!("cp {} /root/", shipr_json_path);
+
+    println!("copy shipr json command is: {}", copy_shipr_json);
+
+    run_script(vec![&copy_shipr_json], get_worker_dir()).await?;
+
+    Ok(true)
 }

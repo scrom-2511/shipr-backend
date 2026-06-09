@@ -32,7 +32,7 @@ CREATE TABLE projects (
     project_type VARCHAR(255),
     full_name VARCHAR(255) NOT NULL,
 
-    dist_dir VARCHAR(255) NOT NULL,
+    dist_dir VARCHAR(255),
     root_dir VARCHAR(255) NOT NULL,
 
     url VARCHAR(255) UNIQUE,

@@ -1,19 +1,22 @@
 use crate::{
     app_errors::AppError,
     core::{
-        app_types::DeployDetails,
+        app_types::{DeployDetails, ShiprJson},
         config::{app_config::get_worker_dir, project_default_config::get_default_config},
         infra::{detect::detect_project_type, process::run_script},
     },
 };
 
-pub async fn install(deploy_details: &DeployDetails) -> Result<(), AppError> {
+pub async fn install(
+    deploy_details: &DeployDetails,
+    shipr_json: &ShiprJson,
+) -> Result<(), AppError> {
     let project_path = get_project_path(deploy_details)?;
 
     let install_cmd = format!(
         "cd {} && {}",
         project_path,
-        get_install_cmds(deploy_details)?
+        get_install_cmds(shipr_json, &project_path)?
     );
 
     run_script(vec![&install_cmd], get_worker_dir()).await?;
@@ -21,13 +24,11 @@ pub async fn install(deploy_details: &DeployDetails) -> Result<(), AppError> {
     Ok(())
 }
 
-pub fn get_install_cmds(deploy_details: &DeployDetails) -> Result<String, AppError> {
-    if deploy_details.install_commands.is_some() {
-        Ok(deploy_details.install_commands.as_ref().unwrap().join("&&"))
+pub fn get_install_cmds(shipr_json: &ShiprJson, project_path: &str) -> Result<String, AppError> {
+    if shipr_json.install_commands.is_some() {
+        Ok(shipr_json.install_commands.as_ref().unwrap().join("&&"))
     } else {
-        let project_path = get_project_path(deploy_details)?;
-
-        let project_type = detect_project_type(&project_path);
+        let project_type = detect_project_type(project_path);
 
         let config = get_default_config(&project_type);
 

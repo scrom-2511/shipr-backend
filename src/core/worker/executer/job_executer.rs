@@ -3,7 +3,7 @@ use std::fs;
 use crate::{
     app_errors::AppError,
     core::{
-        app_types::{DeployDetails, JobType, ProjectType, RedeployDetails, RunDetails},
+        app_types::{DeployDetails, JobType, ProjectType, RedeployDetails, RunDetails, ShiprJson},
         config::app_config::get_worker_dir,
         infra::{detect::detect_project_type, process::run_script},
         worker::{
@@ -44,10 +44,14 @@ impl JobExecuter {
         }
     }
 
-    fn get_project_path(&self, deploy_details: &DeployDetails) -> Result<String, AppError> {
+    fn get_project_path(
+        &self,
+        deploy_details: &DeployDetails,
+        shipr_json: &ShiprJson,
+    ) -> Result<String, AppError> {
         let repo_name = deploy_details.project_id.to_owned();
 
-        if deploy_details.root_dir.is_empty() {
+        if deploy_details.root_dir == "." {
             Ok(format!("/root/{}", repo_name))
         } else {
             Ok(format!("/root/{}/{}", repo_name, deploy_details.root_dir))
@@ -67,16 +71,19 @@ impl JobExecuter {
         commit_hash: Option<String>,
     ) -> Result<(), AppError> {
         let steps_result = async {
-            let (commit_hash, branch) = if job_type == JobType::Deploy {
+            let (shipr_json_exists, commit_hash, branch) = if job_type == JobType::Deploy {
                 pull(deploy_details, None).await?
             } else {
                 pull(deploy_details, commit_hash).await?
             };
 
-            install(deploy_details).await?;
-            build(deploy_details).await?;
+            let shipr_json =
+                serde_json::from_str::<ShiprJson>(&fs::read_to_string("/root/shipr.json")?)?;
 
-            let project_path = self.get_project_path(deploy_details)?;
+            install(deploy_details, &shipr_json).await?;
+            build(deploy_details, &shipr_json).await?;
+
+            let project_path = self.get_project_path(deploy_details, &shipr_json)?;
             let p_type = detect_project_type(&project_path);
 
             Ok::<((String, Option<String>), ProjectType), AppError>(((commit_hash, branch), p_type))
@@ -99,18 +106,18 @@ impl JobExecuter {
                     )
                     .await?;
 
-                self.host
-                    .kill_vm(deploy_details.project_id.to_owned(), job_type)
-                    .await?;
+                // self.host
+                //     .kill_vm(deploy_details.project_id.to_owned(), job_type)
+                //     .await?;
 
                 Ok(())
             }
             Err(e) => {
                 println!("Job execution failed: {:?}", e);
-                let _ = self
-                    .host
-                    .kill_vm(deploy_details.project_id.to_owned(), job_type)
-                    .await;
+                // let _ = self
+                //     .host
+                //     .kill_vm(deploy_details.project_id.to_owned(), job_type)
+                //     .await;
                 Err(e)
             }
         }

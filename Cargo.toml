@@ -31,3 +31,7 @@ validator = { version = "0.20.0", features = ["derive"] }
 actix-cors = "0.7.1"
 env = "1.0.1"
 rustls = { version = "0.23", features = ["ring"] }
+aes-gcm = "0.10.3"
+aead = "0.5.2"
+base64 = "0.22.1"
+hickory-proto = "0.26.1"

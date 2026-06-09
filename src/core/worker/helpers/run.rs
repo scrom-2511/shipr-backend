@@ -1,11 +1,11 @@
-use std::{net::UdpSocket, thread::sleep, time::Duration};
+use std::{fs, net::UdpSocket, thread::sleep, time::Duration};
 
 use tokio::net::TcpStream;
 
 use crate::{
     app_errors::AppError,
     core::{
-        app_types::{DeployDetails, RunDetails},
+        app_types::{DeployDetails, RunDetails, ShiprJson},
         config::{app_config::get_worker_dir, project_default_config::get_default_config},
         infra::{
             detect::detect_project_type,
@@ -28,7 +28,14 @@ pub async fn run(run_details: &RunDetails) -> Result<(), AppError> {
 
     unzip_project(&run_details.project_id).await?;
 
-    run_cmds(run_details).await?;
+    move_shipr_json_to_root(run_details).await?;
+
+    let shipr_json = serde_json::from_str::<ShiprJson>(&fs::read_to_string(format!(
+        "/root/{}/shipr/shipr.json",
+        run_details.project_id
+    ))?)?;
+
+    run_cmds(run_details, &shipr_json).await?;
 
     println!("Run command completed");
     Ok(())
@@ -89,48 +96,45 @@ async fn unzip_project(project_id: &str) -> Result<(), AppError> {
     Ok(())
 }
 
-async fn get_run_cmds(run_details: &RunDetails) -> Result<String, AppError> {
+async fn get_run_cmds(
+    run_details: &RunDetails,
+    shipr_json: &ShiprJson,
+) -> Result<String, AppError> {
     let project_path = format!("/root/{}", run_details.project_id);
 
-    if !run_details.run_command.is_empty() {
-        let run_cmds = run_details.run_command.join(" && ");
+    println!("project path is: {:?}", project_path);
 
-        return Ok(run_cmds);
+    if shipr_json.run_commands.is_some() {
+        return Ok(shipr_json.run_commands.as_ref().unwrap().join("&&"));
     }
 
     let project_type = detect_project_type(&project_path);
 
+    println!("project type is: {:?}", project_type);
+
     let default_config = get_default_config(&project_type);
+
+    println!("default config is: {:?}", default_config);
+
     let config_run_cmd = default_config.run_command.unwrap().join("&&");
+
+    println!("config run cmd is: {}", config_run_cmd);
 
     Ok(config_run_cmd)
 }
 
 async fn get_project_path_to_run(run_details: &RunDetails) -> String {
-    let base_path = format!("/root/{}", run_details.project_id);
-
-    if !run_details.dist_dir.is_empty() {
-        return format!("{}/{}", base_path, run_details.dist_dir);
-    }
-
-    let project_type = detect_project_type(&base_path);
-
-    let default_config = get_default_config(&project_type);
-
-    format!("{}/{}", base_path, default_config.dist_dir)
+    format!("/root/{}", run_details.project_id)
 }
 
-async fn run_cmds(run_details: &RunDetails) -> Result<(), AppError> {
-    let run_cmd = get_run_cmds(run_details).await?;
+async fn run_cmds(run_details: &RunDetails, shipr_json: &ShiprJson) -> Result<(), AppError> {
+    let run_cmd = get_run_cmds(run_details, shipr_json).await?;
 
     let env_cmd = get_env_export_cmd(&run_details.envs);
 
-    let deploy_details =
-        std::fs::read_to_string(format!("/root/{}/shipr/job.json", run_details.project_id))?;
+    let project_path = format!("/root/{}", run_details.project_id);
 
-    let deploy_details: DeployDetails = serde_json::from_str(&deploy_details)?;
-
-    let install_cmd = get_install_cmds(&deploy_details)?;
+    let install_cmd = get_install_cmds(shipr_json, &project_path)?;
 
     let install_cmd_path = format!("/root/{}", run_details.project_id);
 
@@ -141,15 +145,31 @@ async fn run_cmds(run_details: &RunDetails) -> Result<(), AppError> {
 
     run_script(vec![&install_cmd], get_worker_dir()).await?;
 
-    let final_cmd = format!(
-        "cd {} && {} && {}",
-        get_project_path_to_run(run_details).await,
-        env_cmd,
-        run_cmd
-    );
+    let final_cmd = if env_cmd.is_empty() {
+        format!(
+            "cd {} && {}",
+            get_project_path_to_run(run_details).await,
+            run_cmd
+        )
+    } else {
+        format!(
+            "cd {} && {} && {}",
+            get_project_path_to_run(run_details).await,
+            env_cmd,
+            run_cmd
+        )
+    };
 
     println!("final command is: {}", final_cmd);
 
     run_script_bg(vec![&final_cmd], get_worker_dir())?;
+    Ok(())
+}
+
+async fn move_shipr_json_to_root(run_details: &RunDetails) -> Result<(), AppError> {
+    let copy_job_json = format!("cp /root/{}/job.json /root/", run_details.project_id);
+
+    run_script(vec![&copy_job_json], get_worker_dir()).await?;
+
     Ok(())
 }

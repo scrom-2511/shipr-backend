@@ -4,16 +4,16 @@ use std::io::Write;
 use crate::{
     app_errors::AppError,
     core::{
-        app_types::DeployDetails,
+        app_types::{DeployDetails, ShiprJson},
         config::{app_config::get_worker_dir, project_default_config::get_default_config},
         infra::{detect::detect_project_type, process::run_script},
     },
 };
 
-pub async fn build(deploy_details: &DeployDetails) -> Result<(), AppError> {
-    build_project(deploy_details).await?;
+pub async fn build(deploy_details: &DeployDetails, shipr_json: &ShiprJson) -> Result<(), AppError> {
+    build_project(deploy_details, shipr_json).await?;
 
-    archive_project(deploy_details).await?;
+    archive_project(deploy_details, shipr_json).await?;
 
     upload_to_s3(deploy_details).await?;
 
@@ -32,38 +32,45 @@ fn get_project_path(deploy_details: &DeployDetails) -> Result<String, AppError> 
     Ok(format!("{}/{}", base_path, deploy_details.root_dir))
 }
 
-fn get_build_cmds(deploy_details: &DeployDetails) -> Result<String, AppError> {
-    if deploy_details.build_commands.is_some() {
-        Ok(deploy_details.build_commands.as_ref().unwrap().join("&&"))
-    } else {
-        let project_path = get_project_path(deploy_details)?;
-
-        let project_type = detect_project_type(&project_path);
-
-        let config = get_default_config(&project_type);
-
-        Ok(config.build_commands.join("&&"))
+fn get_build_cmds(shipr_json: &ShiprJson, project_path: &str) -> Result<String, AppError> {
+    if shipr_json.build_commands.is_some() {
+        return Ok(shipr_json.build_commands.as_ref().unwrap().join("&&"));
     }
+
+    let project_type = detect_project_type(&project_path);
+
+    let config = get_default_config(&project_type);
+
+    Ok(config.build_commands.join("&&"))
 }
 
-async fn build_project(deploy_details: &DeployDetails) -> Result<(), AppError> {
+async fn build_project(
+    deploy_details: &DeployDetails,
+    shipr_json: &ShiprJson,
+) -> Result<(), AppError> {
     let project_path = get_project_path(deploy_details)?;
 
-    let build_cmd = format!("cd {} && {}", project_path, get_build_cmds(deploy_details)?);
+    let build_cmd = format!(
+        "cd {} && {}",
+        project_path,
+        get_build_cmds(shipr_json, &project_path)?
+    );
 
     run_script(vec![&build_cmd], get_worker_dir()).await?;
 
     Ok(())
 }
 
-async fn archive_project(deploy_details: &DeployDetails) -> Result<String, AppError> {
+async fn archive_project(
+    deploy_details: &DeployDetails,
+    shipr_json: &ShiprJson,
+) -> Result<String, AppError> {
     let project_path = get_project_path(deploy_details)?;
 
     let project_type = detect_project_type(&project_path);
     let config = get_default_config(&project_type);
 
-    let mut deploy_details_update = deploy_details.to_owned();
-    deploy_details_update.project_type = Some(project_type);
+    let deploy_details_update = deploy_details.to_owned();
 
     let mut file = File::options().write(true).open("/root/job.json").unwrap();
 
@@ -77,25 +84,49 @@ async fn archive_project(deploy_details: &DeployDetails) -> Result<String, AppEr
 
     println!("mkdir shipr command is: {}", mkdir_shipr_cmd);
 
-    let cp_job_json_to_shipr = "cp /root/job.json /root/shipr/job.json".to_string();
+    let cp_job_and_shipr_json_to_shipr =
+        "cp /root/job.json /root/shipr.json /root/shipr/".to_string();
 
-    println!("cp job json to shipr command is: {}", cp_job_json_to_shipr);
+    println!(
+        "cp job and shipr json to shipr command is: {}",
+        cp_job_and_shipr_json_to_shipr
+    );
 
     let mv_shipr_cmd = format!("mv /root/shipr {}", project_path);
 
     println!("mv shipr command is: {}", mv_shipr_cmd);
 
     run_script(
-        vec![&mkdir_shipr_cmd, &cp_job_json_to_shipr, &mv_shipr_cmd],
+        vec![
+            &mkdir_shipr_cmd,
+            &cp_job_and_shipr_json_to_shipr,
+            &mv_shipr_cmd,
+        ],
         get_worker_dir(),
     )
     .await?;
 
     let artifacts = config.deploy_artifacts.join(" ");
 
+    let include_dir = if shipr_json.include.is_some() {
+        format!(" {}", shipr_json.include.as_ref().unwrap().join(" "))
+    } else {
+        "".to_string()
+    };
+
+    let exclude_dir = if shipr_json.exclude.is_some() {
+        format!(" {}", shipr_json.exclude.as_ref().unwrap().join(" "))
+    } else {
+        "".to_string()
+    };
+
+    let create_unnecessary_files_cmd = "touch /root/shipr/unnecessary_file.txt";
+
+    run_script(vec![create_unnecessary_files_cmd], get_worker_dir()).await?;
+
     let zip_cmd = format!(
-        "cd {} && zip -r /root/{}.zip {} shipr",
-        project_path, deploy_details.project_id, artifacts,
+        "cd {} && zip -r /root/{}.zip {} shipr{} -x /root/shipr/unnecessary_file.txt {}",
+        project_path, deploy_details.project_id, artifacts, include_dir, exclude_dir
     );
 
     println!("zip command is: {}", zip_cmd);

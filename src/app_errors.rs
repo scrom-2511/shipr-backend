@@ -1,3 +1,4 @@
+
 use actix_web::{HttpResponse, ResponseError, http::StatusCode};
 use aws_sdk_s3::presigning::PresigningConfigError;
 use sqlx::error::Error as SqlxError;
@@ -34,6 +35,12 @@ pub enum AppError {
 
     #[error("Tokio mpsc error: {0}")]
     TokioMpscError(#[from] tokio::sync::broadcast::error::SendError<std::string::String>),
+
+    #[error("hickory_proto::serialize::binary::DecodeError: {0}")]
+    HickoryProtoDecodeError(#[from] hickory_proto::serialize::binary::DecodeError),
+
+    #[error("hickory_proto::error::ProtoError: {0}")]
+    HickoryProtoError(#[from] hickory_proto::ProtoError),
 
     #[error("Lapin error: {0}")]
     LapinError(String),
@@ -130,6 +137,9 @@ pub enum AppError {
 
     #[error("Internal server error")]
     InternalServerError,
+
+    #[error("Bad request: {0}")]
+    BadRequest(String),
 }
 
 impl ResponseError for AppError {

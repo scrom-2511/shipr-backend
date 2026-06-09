@@ -266,13 +266,16 @@ impl JobDispatcher {
                 .get_presigned_download_url(project_id)
                 .await?;
 
-            let row: (Option<Vec<String>>, Option<Vec<String>>, Option<String>) = sqlx::query_as(
-                "SELECT envs, run_cmds, dist_dir FROM projects WHERE project_id = $1",
-            )
-            .bind(project_id)
-            .fetch_one(&self.pool)
-            .await
-            .map_err(|e| AppError::Database(e.to_string()))?;
+            println!("presigned download url is: {}", presigned_download_url);
+
+            let row: (Option<Vec<String>>,) =
+                sqlx::query_as("SELECT envs FROM projects WHERE project_id = $1")
+                    .bind(project_id)
+                    .fetch_one(&self.pool)
+                    .await
+                    .map_err(|e| AppError::Database(e.to_string()))?;
+
+            println!("row is: {:?}", row);
 
             let envs: Option<Vec<EnvVar>> = match row.0 {
                 Some(encrypted_envs_vec) => {
@@ -288,17 +291,15 @@ impl JobDispatcher {
                 None => None,
             };
 
-            let run_command = row.1.unwrap();
-
             let run_details = RunDetails {
                 presigned_download_url,
-                run_command,
                 project_id: project_id.to_string(),
                 envs,
-                dist_dir: row.2.unwrap(),
             };
 
             self.move_json_to_vm(&vm, &run_details).await?;
+
+            println!("move json to vm completed");
 
             let id_allocator = self.id_allocator.clone();
             let vm_pool = self.vm_pool.clone();

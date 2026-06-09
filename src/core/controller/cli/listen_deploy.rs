@@ -57,17 +57,13 @@ pub async fn listen_deploy(
         println!("Access Token fetched");
 
         let deploy_details = DeployDetails {
-            install_commands: Some(deploy_details_req.install_cmds),
-            build_commands: Some(deploy_details_req.build_cmds),
             branch: Some(deploy_details_req.branch),
             full_name: deploy_details_req.full_name,
-            root_dir: deploy_details_req.root_dir,
-            dist_dir: deploy_details_req.dist_dir,
             presigned_upload_url,
+            root_dir: deploy_details_req.root_dir,
             installation_access_token: access_token,
             envs: Some(deploy_details_req.envs),
             project_id,
-            project_type: None,
         };
 
         let id_allocator = id_allocator.clone();

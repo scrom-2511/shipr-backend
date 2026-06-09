@@ -8,3 +8,4 @@ pub mod get_project_details;
 pub mod get_project_traffic;
 pub mod job_completed;
 pub mod kill_vm_controller;
+pub mod delete_project;
