@@ -58,7 +58,6 @@ pub fn get_default_config(project_type: &ProjectType) -> ProjectDefaultConfig {
         ProjectType::React => react_default_config(),
         ProjectType::Html => html_default_config(),
         ProjectType::Rust => rust_default_config(),
-        ProjectType::Next => next_default_config(),
         ProjectType::Unknown => panic!("Unknown project type"),
     }
 }

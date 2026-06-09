@@ -73,7 +73,6 @@ pub enum ProjectType {
     Rust,
     React,
     Node,
-    Next,
     Unknown,
 }
 
@@ -84,7 +83,6 @@ impl fmt::Display for ProjectType {
             ProjectType::Rust => "rust",
             ProjectType::React => "react",
             ProjectType::Node => "node",
-            ProjectType::Next => "next",
             ProjectType::Unknown => "unknown",
         };
         write!(f, "{}", s)
