@@ -126,7 +126,7 @@ impl JobDispatcher {
         let job_type = vm_details.get_job_type().to_string().to_lowercase();
 
         let job_json_path = format!(
-            "/home/scrom/code/shipr/job_jsons/{}/{}.json",
+            "/home/scrom/code/shipr/shipr-backend/job_jsons/{}/{}.json",
             job_type, project_id
         );
 
@@ -157,8 +157,6 @@ impl JobDispatcher {
             .await?
             .0;
 
-        println!("vm is xyz");
-
         let base_id = vm.get_base_id();
         println!("vm id is: {}", base_id);
 
@@ -170,7 +168,7 @@ impl JobDispatcher {
 
         run_script(
             vec![&format!(
-                "scp -r -i /home/scrom/ubuntu.id_rsa /home/scrom/code/shipr/target/release/worker root@{}:/root/worker",
+                "scp -r -i /home/scrom/ubuntu.id_rsa /home/scrom/code/shipr/shipr-backend/target/release/worker root@{}:/root/worker",
                 vm_ip
             )],
             get_dir(),
@@ -226,7 +224,7 @@ impl JobDispatcher {
 
         run_script(
             vec![&format!(
-                "scp -r -i /home/scrom/ubuntu.id_rsa /home/scrom/code/shipr/target/release/worker root@{}:/root/worker",
+                "scp -r -i /home/scrom/ubuntu.id_rsa /home/scrom/code/shipr/shipr-backend/target/release/worker root@{}:/root/worker",
                 vm_ip
             )],
             get_dir(),
@@ -252,7 +250,7 @@ impl JobDispatcher {
 
         run_script(
             vec![&format!(
-                "scp -r -i /home/scrom/ubuntu.id_rsa /home/scrom/code/shipr/target/release/worker root@{}:/root/worker",
+                "scp -r -i /home/scrom/ubuntu.id_rsa /home/scrom/code/shipr/shipr-backend/target/release/worker root@{}:/root/worker",
                 vm_ip
             )],
             get_dir(),

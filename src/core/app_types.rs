@@ -67,7 +67,8 @@ pub enum JobType {
     Redeploy,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, sqlx::Type, Copy)]
+#[sqlx(type_name = "project_type", rename_all = "lowercase")]
 pub enum ProjectType {
     Html,
     Rust,

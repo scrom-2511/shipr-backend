@@ -29,7 +29,7 @@ pub async fn stream_logs_handler(
 
     let stream = async_stream::stream! {
 
-        let file_path = "/home/scrom/code/shipr/logs";
+        let file_path = "/home/scrom/code/shipr/shipr-backend/logs";
 
         let old_logs = fs::read_to_string(format!("{}/{}.txt", file_path, project_id)).unwrap();
 
@@ -74,7 +74,7 @@ pub async fn logs_handler(
 
     let log = data["log"].as_str().unwrap();
 
-    let file_path = "/home/scrom/code/shipr/logs";
+    let file_path = "/home/scrom/code/shipr/shipr-backend/logs";
 
     let mut file = fs::OpenOptions::new()
         .create(true)

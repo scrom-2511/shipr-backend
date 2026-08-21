@@ -1,0 +1,34 @@
+-- Add billing fields to users
+ALTER TABLE users 
+ADD COLUMN IF NOT EXISTS credit_balance DOUBLE PRECISION NOT NULL DEFAULT 50.00,
+ADD COLUMN IF NOT EXISTS plan_tier VARCHAR(50) NOT NULL DEFAULT 'Developer';
+
+-- Add active_seconds tracking to projects
+ALTER TABLE projects 
+ADD COLUMN IF NOT EXISTS active_seconds BIGINT NOT NULL DEFAULT 3600;
+
+-- Create billing_invoices table
+CREATE TABLE IF NOT EXISTS billing_invoices (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    invoice_number VARCHAR(100) NOT NULL UNIQUE,
+    amount DOUBLE PRECISION NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'paid',
+    active_hours DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    rate_per_hour DOUBLE PRECISION NOT NULL DEFAULT 0.02,
+    period_start TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP - INTERVAL '30 days',
+    period_end TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create payment_methods table
+CREATE TABLE IF NOT EXISTS payment_methods (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    card_brand VARCHAR(50) NOT NULL DEFAULT 'Visa',
+    last4 VARCHAR(4) NOT NULL DEFAULT '4242',
+    exp_month INTEGER NOT NULL DEFAULT 12,
+    exp_year INTEGER NOT NULL DEFAULT 2028,
+    is_default BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

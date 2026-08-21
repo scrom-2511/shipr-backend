@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use aws_config::BehaviorVersion;
-use aws_sdk_s3::{Client, config::Builder, presigning::PresigningConfig};
+use aws_sdk_s3::{Client, config::{Builder, ProvideCredentials}, presigning::PresigningConfig};
 
 use crate::app_errors::AppError;
 
@@ -18,6 +18,20 @@ impl S3Service {
             .region("us-east-1")
             .load()
             .await;
+
+        if let Some(provider) = config.credentials_provider() {
+            match provider.provide_credentials().await {
+                Ok(credentials) => {
+                    println!("Access key: {}", credentials.access_key_id());
+                    println!("Secret key: {}", credentials.secret_access_key());
+                }
+                Err(err) => {
+                    println!("Failed to load credentials: {}", err);
+                }
+            }
+        } else {
+            println!("No credentials provider configured");
+        }
 
         let s3_config = Builder::from(&config).force_path_style(true).build();
 

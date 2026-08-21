@@ -20,6 +20,8 @@ CREATE TABLE github_repos (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TYPE project_type AS ENUM ('html', 'rust', 'react', 'node', 'unknown');
+
 CREATE TABLE projects (
     id SERIAL PRIMARY KEY,
     project_id VARCHAR(255) NOT NULL UNIQUE,
@@ -29,7 +31,7 @@ CREATE TABLE projects (
     build_cmds TEXT[],
 
     branch VARCHAR(255),
-    project_type VARCHAR(255),
+    project_type project_type,
     full_name VARCHAR(255) NOT NULL,
 
     dist_dir VARCHAR(255),

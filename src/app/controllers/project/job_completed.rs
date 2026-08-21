@@ -22,7 +22,7 @@ pub async fn job_completed_controller(
         )
         .bind(body.commit_hash.unwrap())
         .bind(now)
-        .bind(body.project_type.to_string())
+        .bind(body.project_type)
         .bind(&body.project_id)
         .bind(body.branch.unwrap())
         .bind("active")
@@ -33,7 +33,7 @@ pub async fn job_completed_controller(
             "UPDATE projects SET last_deployment_time = $1, project_type = $2, status = $3 WHERE project_id = $4",
         )
         .bind(now)
-        .bind(body.project_type.to_string())
+        .bind(body.project_type)
         .bind(&body.project_id)
         .bind("active")
         .execute(pool.as_ref())

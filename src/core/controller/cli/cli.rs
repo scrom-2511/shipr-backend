@@ -65,7 +65,7 @@ pub async fn cli(
     match args.command {
         Commands::Listen => {
             println!("Starting listener...");
-            listen(id_allocator, vm_pool, s3_service, heartbeat_store, pool).await?;
+            listen(id_allocator, vm_pool, s3_service, heartbeat_store, pool, redis).await?;
         }
 
         Commands::Serve => {

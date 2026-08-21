@@ -25,7 +25,7 @@ pub async fn deploy_handler(
 
     let (tx, _) = channel::<String>(100);
 
-    let file_path = "/home/scrom/code/shipr/logs";
+    let file_path = "/home/scrom/code/shipr/shipr-backend/logs";
 
     fs::create_dir_all(file_path).unwrap();
 

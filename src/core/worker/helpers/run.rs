@@ -116,7 +116,7 @@ async fn get_run_cmds(
 
     println!("default config is: {:?}", default_config);
 
-    let config_run_cmd = default_config.run_command.unwrap().join("&&");
+    let config_run_cmd = default_config.run_commands.unwrap().join("&&");
 
     println!("config run cmd is: {}", config_run_cmd);
 

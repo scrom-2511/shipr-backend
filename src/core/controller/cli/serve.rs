@@ -6,7 +6,9 @@ use crate::{
     app_errors::AppError,
     core::controller::{
         api::vm_request_proxy::VmRequestProxy,
+        cli::listen_idle_kill::listen_idle_kill,
         dispatcher::job_dispatcher::JobDispatcher,
+        queue::{idle_kill_queue::IdleKillQueue, lapin::Lapin},
         storage::{redis::Redis, s3::S3Service},
         vm::{
             firecracker::Firecracker, heartbeat_store::HeartbeatStore, id_allocator::IdAllocator,
@@ -31,6 +33,10 @@ pub async fn serve(
     pool: DbPool,
     redis: Redis,
 ) -> Result<(), AppError> {
+    let lapin_conn = Lapin::new().await?;
+    let idle_kill_queue = IdleKillQueue::new(&lapin_conn).await?;
+    let idle_kill_queue_data = web::Data::new(idle_kill_queue.clone());
+
     let job_dispatcher = JobDispatcher::new(
         vm_pool.clone(),
         s3_service.clone(),
@@ -43,20 +49,37 @@ pub async fn serve(
         vm_pool.clone(),
         job_dispatcher.clone(),
         heartbeat_store.clone(),
-        pool,
-        redis,
+        pool.clone(),
+        redis.clone(),
+        idle_kill_queue,
     )?));
+
+    // Spawn idle kill listener worker task
+    {
+        let redis = redis.clone();
+        let vm_pool = vm_pool.clone();
+        let id_allocator = id_allocator.clone();
+        let pool_data = web::Data::new(pool.clone());
+        let idle_kill_queue_data = idle_kill_queue_data.clone();
+
+        tokio::spawn(async move {
+            listen_idle_kill(
+                idle_kill_queue_data,
+                redis,
+                vm_pool,
+                id_allocator,
+                pool_data,
+            )
+            .await;
+        });
+    }
 
     for _ in 0..1 {
         let mut new_vm = Firecracker::new_from_id_allocator(&id_allocator).await;
         new_vm.create_hot_vm(&vm_pool).await?;
     }
 
-    println!("Starting server");
-
-    // let dns = ShiprDNS::new(vm_pool);
-
-    // dns.start().await?;
+    println!("Starting proxy server");
 
     HttpServer::new(move || {
         App::new()

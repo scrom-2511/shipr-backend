@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub mod auth;
+pub mod billing;
 pub mod github;
 pub mod project;
 

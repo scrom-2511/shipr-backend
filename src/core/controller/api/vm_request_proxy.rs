@@ -2,6 +2,7 @@ use crate::app::db::DbPool;
 use crate::app_errors::AppError;
 use crate::core::app_types::JobType;
 use crate::core::controller::dispatcher::job_dispatcher::JobDispatcher;
+use crate::core::controller::queue::idle_kill_queue::{IdleKillQueue, IdleKillReq};
 use crate::core::controller::storage::redis::Redis;
 use crate::core::controller::vm::heartbeat_store::HeartbeatStore;
 use crate::core::controller::vm::vm_pool::VmPool;
@@ -23,6 +24,7 @@ pub struct VmRequestProxy {
     heartbeat_store: HeartbeatStore,
     pool: DbPool,
     redis: Redis,
+    idle_kill_queue: IdleKillQueue,
 }
 
 impl VmRequestProxy {
@@ -32,6 +34,7 @@ impl VmRequestProxy {
         heartbeat_store: HeartbeatStore,
         pool: DbPool,
         redis: Redis,
+        idle_kill_queue: IdleKillQueue,
     ) -> Result<Self, AppError> {
         let client = Client::new();
 
@@ -42,6 +45,7 @@ impl VmRequestProxy {
             heartbeat_store,
             pool,
             redis,
+            idle_kill_queue,
         })
     }
 
@@ -158,6 +162,30 @@ impl VmRequestProxy {
         body: web::Bytes,
     ) -> Result<HttpResponse, AppError> {
         let (project_id, numeric_id, target_path) = self.extract_project_and_path(&req).await?;
+
+        // 1. Redis Idle Expiration & Queue Job Scheduling Logic
+        let mut redis_conn = self.redis.get_conn();
+        let last_req_key = format!("project:last_request_time:{}", project_id);
+        let start_time_key = format!("project:vm_start_time:{}", project_id);
+        let now_ts = chrono::Utc::now().timestamp();
+
+        let existing_start_time: Option<i64> = redis_conn.get(&start_time_key).await.ok().flatten();
+
+        if existing_start_time.is_none() {
+            // First time a request hits for this project!
+            let _: () = redis_conn.set(&start_time_key, now_ts).await.unwrap_or(());
+
+            // Push job to idle_kill_queue
+            if let Err(e) = self.idle_kill_queue.add_to_queue(&IdleKillReq {
+                project_id: project_id.clone(),
+                numeric_id,
+            }).await {
+                eprintln!("Failed to push job to idle_kill_queue: {:?}", e);
+            }
+        }
+
+        // On every request, update last request time and extend 1-hour delay in Redis
+        let _: () = redis_conn.set_ex(&last_req_key, now_ts, 3600).await.unwrap_or(());
 
         if let Err(e) = self.track_traffic(numeric_id).await {
             println!(

@@ -16,6 +16,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let vm_pool = VmPool::new(redis.clone(), id_allocator.clone());
     let dns = ShiprDNS::new(vm_pool);
 
+    println!("starting...");
+
     dns.start().await?;
 
     Ok(())

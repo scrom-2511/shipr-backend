@@ -1,7 +1,8 @@
-use crate::app::controllers::ApiResponse;
 use crate::app::db::DbPool;
 use crate::app::middlewares::AuthMiddleware;
 use crate::app_errors::AppError;
+use crate::core::config::project_default_config::get_default_config;
+use crate::{app::controllers::ApiResponse, core::app_types::ProjectType};
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, web};
 use chrono::NaiveDateTime;
 use serde::Serialize;
@@ -21,7 +22,6 @@ pub struct ProjectDetail {
     pub status: String,
     pub last_deployment_time: NaiveDateTime,
     pub root_dir: String,
-    pub dist_dir: String,
     pub install_cmds: Vec<String>,
     pub build_cmds: Vec<String>,
     pub run_cmds: Vec<String>,
@@ -38,12 +38,12 @@ struct ProjectRow {
     pub status: String,
     pub last_deployment_time: Option<NaiveDateTime>,
     pub root_dir: String,
-    pub dist_dir: String,
     pub install_cmds: Option<Vec<String>>,
     pub build_cmds: Option<Vec<String>>,
     pub run_cmds: Option<Vec<String>>,
     pub url: Option<String>,
     pub commit_hash: Option<String>,
+    pub project_type: Option<ProjectType>,
 }
 
 pub async fn get_project_details_controller(
@@ -73,7 +73,7 @@ pub async fn get_project_details_controller(
         SELECT 
             id, project_id, full_name, branch, status::text as status, last_deployment_time, 
             root_dir, dist_dir, install_cmds, build_cmds, run_cmds, 
-            url, commit_hash
+            url, commit_hash, project_type
         FROM projects 
         WHERE id = $1 AND user_id = $2
     "#;
@@ -99,6 +99,40 @@ pub async fn get_project_details_controller(
         _ => "error",
     };
 
+    let install_cmds = if row.install_cmds.is_none() {
+        let install_cmds = get_default_config(&row.project_type.unwrap())
+            .install_commands
+            .into_iter()
+            .map(String::from)
+            .collect();
+        Some(install_cmds)
+    } else {
+        row.install_cmds
+    };
+
+    let build_cmds = if row.build_cmds.is_none() {
+        let build_cmds = get_default_config(&row.project_type.unwrap())
+            .build_commands
+            .into_iter()
+            .map(String::from)
+            .collect();
+        Some(build_cmds)
+    } else {
+        row.build_cmds
+    };
+
+    let run_cmds = if row.run_cmds.is_none() {
+        let run_cmds = get_default_config(&row.project_type.unwrap())
+            .run_commands
+            .unwrap()
+            .into_iter()
+            .map(String::from)
+            .collect();
+        Some(run_cmds)
+    } else {
+        row.run_cmds
+    };
+
     let project = ProjectDetail {
         id: row.id,
         project_id: row.project_id,
@@ -109,10 +143,9 @@ pub async fn get_project_details_controller(
             .last_deployment_time
             .unwrap_or_else(|| chrono::Utc::now().naive_utc()),
         root_dir: row.root_dir,
-        dist_dir: row.dist_dir,
-        install_cmds: row.install_cmds.unwrap_or_default(),
-        build_cmds: row.build_cmds.unwrap_or_default(),
-        run_cmds: row.run_cmds.unwrap_or_default(),
+        install_cmds: install_cmds.unwrap(),
+        build_cmds: build_cmds.unwrap(),
+        run_cmds: run_cmds.unwrap(),
         github_url: row.url.unwrap_or_default(),
         commit_hash: row.commit_hash.unwrap_or_default(),
     };

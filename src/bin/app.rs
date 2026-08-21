@@ -6,6 +6,8 @@ use dotenv::dotenv;
 use shipr::app::controllers::auth::github_signup::{github_auth_url, github_callback};
 use shipr::app::controllers::auth::signin::signin_controller;
 use shipr::app::controllers::auth::signup::signup_controller;
+use shipr::app::controllers::billing::add_credits::add_credits_controller;
+use shipr::app::controllers::billing::get_billing_details::get_billing_details_controller;
 use shipr::app::controllers::github::get_state::get_state;
 use shipr::app::controllers::github::update_userid_github_app_installations::update_userid_github_app_installations;
 use shipr::app::controllers::project::add_new_project::add_new_project;
@@ -22,9 +24,11 @@ use shipr::app::controllers::project::kill_vm_controller::kill_vm_controller;
 use shipr::app::middlewares::is_logged_in::is_logged_in;
 use shipr::app::webhooks::github_event::github_event;
 use shipr::core::controller::cli::listen_deploy::listen_deploy;
+use shipr::core::controller::cli::listen_idle_kill::listen_idle_kill;
 use shipr::core::controller::cli::listen_redeploy::listen_redeploy;
 use shipr::core::controller::dispatcher::job_dispatcher::JobDispatcher;
 use shipr::core::controller::queue::deploy_queue::DeployQueue;
+use shipr::core::controller::queue::idle_kill_queue::IdleKillQueue;
 use shipr::core::controller::queue::lapin::Lapin;
 use shipr::core::controller::queue::redeploy_queue::ReDeployQueue;
 use shipr::core::controller::storage::redis::Redis;
@@ -78,6 +82,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let lapin_conn = Lapin::new().await?;
     let deploy_queue = web::Data::new(DeployQueue::new(&lapin_conn).await?);
     let redeploy_queue = web::Data::new(ReDeployQueue::new(&lapin_conn).await?);
+    let idle_kill_queue = web::Data::new(IdleKillQueue::new(&lapin_conn).await?);
 
     let s3_service = s3_service.clone();
 
@@ -121,9 +126,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
         });
     }
 
+    {
+        let id_allocator = id_allocator.clone();
+        let vm_pool = vm_pool.clone();
+        let idle_kill_queue = idle_kill_queue.clone();
+        let redis = redis.clone();
+        let pool_data = web::Data::new(pool.clone());
+
+        tokio::spawn(async move {
+            listen_idle_kill(
+                idle_kill_queue,
+                redis,
+                vm_pool,
+                id_allocator,
+                pool_data,
+            )
+            .await;
+        });
+    }
+
     HttpServer::new(move || {
         let cors = actix_cors::Cors::default()
-            .allowed_origin("https://flux-analytical-sheffield-journalists.trycloudflare.com")
+            .allowed_origin("https://presented-tank-forwarding-scenes.trycloudflare.com")
             .allowed_origin("http://localhost:5173")
             .allow_any_method()
             .allow_any_header()
@@ -133,6 +157,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         App::new()
             .app_data(deploy_queue.clone())
             .app_data(redeploy_queue.clone())
+            .app_data(idle_kill_queue.clone())
             .app_data(web::Data::new(id_allocator.clone()))
             .app_data(web::Data::new(vm_pool.clone()))
             .wrap(cors)
@@ -177,6 +202,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     .route(
                         "/delete-project",
                         web::delete().to(delete_project_controller),
+                    )
+                    .route(
+                        "/get-billing-details",
+                        web::get().to(get_billing_details_controller),
+                    )
+                    .route(
+                        "/add-credits",
+                        web::post().to(add_credits_controller),
                     ),
             )
     })
