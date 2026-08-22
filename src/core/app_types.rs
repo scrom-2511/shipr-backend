@@ -67,13 +67,20 @@ pub enum JobType {
     Redeploy,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, sqlx::Type, Copy)]
-#[sqlx(type_name = "project_type", rename_all = "lowercase")]
+use sea_orm::entity::prelude::*;
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, Copy, EnumIter, DeriveActiveEnum)]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "project_type")]
 pub enum ProjectType {
+    #[sea_orm(string_value = "html")]
     Html,
+    #[sea_orm(string_value = "rust")]
     Rust,
+    #[sea_orm(string_value = "react")]
     React,
+    #[sea_orm(string_value = "node")]
     Node,
+    #[sea_orm(string_value = "unknown")]
     Unknown,
 }
 

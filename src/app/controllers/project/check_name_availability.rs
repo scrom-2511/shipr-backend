@@ -1,8 +1,9 @@
-use actix_web::{HttpResponse, web};
+use actix_web::{web, HttpResponse};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    app::{controllers::ApiResponse, db::DbPool},
+    app::{controllers::ApiResponse, db::DbPool, models::projects},
     app_errors::AppError,
 };
 
@@ -21,22 +22,15 @@ pub async fn check_repo_name_availability(
     pool: web::Data<DbPool>,
 ) -> Result<HttpResponse, AppError> {
     println!("check_repo_name_availability called");
-    let exists: bool = sqlx::query_scalar(
-        r#"
-        SELECT EXISTS(
-            SELECT 1
-            FROM projects
-            WHERE project_id = $1
-        )
-        "#,
-    )
-    .bind(&body.project_name)
-    .fetch_one(pool.as_ref())
-    .await
-    .map_err(|e| {
-        println!("DB ERROR: {:?}", e);
-        AppError::Database(e.to_string())
-    })?;
+    let exists = projects::Entity::find()
+        .filter(projects::Column::ProjectId.eq(&body.project_name))
+        .one(pool.as_ref())
+        .await
+        .map_err(|e| {
+            println!("DB ERROR: {:?}", e);
+            AppError::Database(e.to_string())
+        })?
+        .is_some();
 
     Ok(HttpResponse::Ok().json(ApiResponse {
         success: true,

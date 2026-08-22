@@ -1,6 +1,8 @@
 use crate::app::db::DbPool;
+use crate::app::models::projects;
 use crate::app_errors::AppError;
-use actix_web::{HttpResponse, web};
+use actix_web::{web, HttpResponse};
+use sea_orm::{ActiveModelTrait, Set};
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
@@ -45,28 +47,21 @@ pub async fn add_new_project(
         .validate()
         .map_err(|err| AppError::ValidationError(err.to_string()))?;
 
-    let query = r#"
-        INSERT INTO projects (
-            full_name, project_id, install_cmds, run_cmds,
-            build_cmds, dist_dir, root_dir, url, user_id, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-    "#;
+    let new_project = projects::ActiveModel {
+        full_name: Set(project.name),
+        project_id: Set(project.slug),
+        install_cmds: Set(project.install_cmds),
+        run_cmds: Set(project.run_cmds),
+        build_cmds: Set(project.build_cmds),
+        dist_dir: Set(Some(project.dist_dir)),
+        root_dir: Set(project.root_dir),
+        url: Set(Some(project.url)),
+        user_id: Set(project.user_id),
+        status: Set("active".to_string()),
+        ..Default::default()
+    };
 
-    let result = sqlx::query(query)
-        .bind(&project.name)
-        .bind(&project.slug)
-        .bind(&project.install_cmds)
-        .bind(&project.run_cmds)
-        .bind(&project.build_cmds)
-        .bind(&project.dist_dir)
-        .bind(&project.root_dir)
-        .bind(&project.url)
-        .bind(project.user_id)
-        .bind("active")
-        .execute(pool.as_ref())
-        .await;
-
-    match result {
+    match new_project.insert(pool.as_ref()).await {
         Ok(_) => Ok(HttpResponse::Created().json(AddProjectResponse {
             message: "Project created successfully".to_string(),
         })),

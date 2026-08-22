@@ -1,8 +1,9 @@
 use actix_web::web;
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    app::db::DbPool,
+    app::{db::DbPool, models::projects},
     app_errors::AppError,
     core::controller::queue::redeploy_queue::ReDeployQueue,
 };
@@ -48,14 +49,13 @@ pub async fn github_webhook_push(
     let incoming_branch = body.ref_field.replace("refs/heads/", "");
     let full_name = &body.repository.full_name;
 
-    let project_exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM projects WHERE full_name = $1 AND branch = $2)",
-    )
-    .bind(full_name)
-    .bind(&incoming_branch)
-    .fetch_one(pool.as_ref())
-    .await
-    .map_err(|e| AppError::Database(e.to_string()))?;
+    let project_exists = projects::Entity::find()
+        .filter(projects::Column::FullName.eq(full_name))
+        .filter(projects::Column::Branch.eq(&incoming_branch))
+        .one(pool.as_ref())
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?
+        .is_some();
 
     if project_exists {
         redeploy_queue.publish(&body).await?;

@@ -1,22 +1,13 @@
 use crate::app::controllers::ApiResponse;
 use crate::app::db::DbPool;
 use crate::app::middlewares::AuthMiddleware;
+use crate::app::models::projects;
 use crate::app_errors::AppError;
 
-use actix_web::{HttpMessage, HttpRequest, HttpResponse, web};
+use actix_web::{web, HttpMessage, HttpRequest, HttpResponse};
 use chrono::NaiveDateTime;
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
 use serde::Serialize;
-use sqlx::FromRow;
-
-#[derive(Debug, FromRow)]
-struct DeployedProjectRow {
-    id: i32,
-    project_id: String,
-    branch: Option<String>,
-    full_name: String,
-    status: String,
-    last_deployment_time: Option<NaiveDateTime>,
-}
 
 #[derive(Debug, Serialize)]
 struct DeployedProject {
@@ -43,22 +34,10 @@ pub async fn get_all_deployed_projects_controller(
 
     println!("user_id: {}", user_id);
 
-    let query = r#"
-    SELECT
-        id,
-        project_id,
-        branch,
-        full_name,
-        status,
-        last_deployment_time
-    FROM projects
-    WHERE user_id = $1
-    ORDER BY created_at DESC
-    "#;
-
-    let rows: Vec<DeployedProjectRow> = sqlx::query_as(query)
-        .bind(user_id)
-        .fetch_all(pool.as_ref())
+    let rows = projects::Entity::find()
+        .filter(projects::Column::UserId.eq(user_id))
+        .order_by_desc(projects::Column::CreatedAt)
+        .all(pool.as_ref())
         .await
         .map_err(|e| {
             println!("Database error in get_all_deployed_projects: {}", e);

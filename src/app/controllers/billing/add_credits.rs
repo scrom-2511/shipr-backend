@@ -1,9 +1,11 @@
 use crate::app::controllers::ApiResponse;
 use crate::app::db::DbPool;
 use crate::app::middlewares::AuthMiddleware;
+use crate::app::models::{billing_invoices, users};
 use crate::app_errors::AppError;
 
-use actix_web::{HttpMessage, HttpRequest, HttpResponse, web};
+use actix_web::{web, HttpMessage, HttpRequest, HttpResponse};
+use sea_orm::{ActiveModelTrait, EntityTrait, Set};
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
@@ -25,7 +27,8 @@ pub async fn add_credits_controller(
     req: HttpRequest,
     body: web::Json<AddCreditsRequest>,
 ) -> Result<HttpResponse, AppError> {
-    body.validate().map_err(|e| AppError::ValidationError(e.to_string()))?;
+    body.validate()
+        .map_err(|e| AppError::ValidationError(e.to_string()))?;
 
     let user_id = req
         .extensions()
@@ -36,29 +39,35 @@ pub async fn add_credits_controller(
     let amount = body.amount;
 
     // Update user balance
-    let updated_user: (f64,) = sqlx::query_as(
-        "UPDATE users SET credit_balance = COALESCE(credit_balance, 0.0) + $1 WHERE id = $2 RETURNING credit_balance",
-    )
-    .bind(amount)
-    .bind(user_id)
-    .fetch_one(pool.as_ref())
-    .await
-    .map_err(|e| AppError::Database(e.to_string()))?;
+    let user = users::Entity::find_by_id(user_id)
+        .one(pool.as_ref())
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?
+        .ok_or(AppError::UserNotFound)?;
 
-    let new_balance = updated_user.0;
+    let new_balance = user.credit_balance + amount;
+    let mut user_active: users::ActiveModel = user.into();
+    user_active.credit_balance = Set(new_balance);
+    user_active
+        .update(pool.as_ref())
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
 
     // Create an invoice record for credit addition
     let timestamp = chrono::Utc::now().timestamp_millis() % 100000;
     let invoice_number = format!("INV-TOPUP-{}", timestamp);
 
-    let _ = sqlx::query(
-        "INSERT INTO billing_invoices (user_id, invoice_number, amount, status, active_hours, rate_per_hour) VALUES ($1, $2, $3, 'paid', 0.0, 0.02)",
-    )
-    .bind(user_id)
-    .bind(&invoice_number)
-    .bind(amount)
-    .execute(pool.as_ref())
-    .await;
+    let new_invoice = billing_invoices::ActiveModel {
+        user_id: Set(user_id),
+        invoice_number: Set(invoice_number.clone()),
+        amount: Set(amount),
+        status: Set("paid".to_string()),
+        active_hours: Set(0.0),
+        rate_per_hour: Set(0.02),
+        ..Default::default()
+    };
+
+    let _ = new_invoice.insert(pool.as_ref()).await;
 
     let response = AddCreditsResponse {
         new_balance,

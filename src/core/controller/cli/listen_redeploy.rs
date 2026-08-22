@@ -50,11 +50,12 @@ pub async fn listen_redeploy(
             }
         }
 
-        let projects: Vec<crate::app::models::Project> =
-            match sqlx::query_as("SELECT * FROM projects WHERE full_name = $1 AND branch = $2")
-                .bind(full_name)
-                .bind(&incoming_branch)
-                .fetch_all(pool.as_ref())
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+        let projects: Vec<crate::app::models::projects::Model> =
+            match crate::app::models::projects::Entity::find()
+                .filter(crate::app::models::projects::Column::FullName.eq(full_name))
+                .filter(crate::app::models::projects::Column::Branch.eq(&incoming_branch))
+                .all(pool.as_ref())
                 .await
             {
                 Ok(p) => p,

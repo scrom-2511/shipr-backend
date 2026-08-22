@@ -3,7 +3,7 @@ use lapin::{
     BasicProperties, Channel, Queue,
     message::Delivery,
     options::{
-        BasicAckOptions, BasicConsumeOptions, BasicPublishOptions, ExchangeDeclareOptions,
+        BasicConsumeOptions, BasicPublishOptions, ExchangeDeclareOptions,
         QueueBindOptions, QueueDeclareOptions,
     },
     types::{AMQPValue, FieldTable, LongString, ShortString},

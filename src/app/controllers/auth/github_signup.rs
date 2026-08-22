@@ -1,8 +1,9 @@
 use actix_web::{HttpResponse, web};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    app::controllers::auth::generate_token, app::db::DbPool, app::models::User,
+    app::controllers::auth::generate_token, app::db::DbPool, app::models::users,
     app_errors::AppError,
 };
 
@@ -123,26 +124,26 @@ pub async fn github_callback(
         .name
         .unwrap_or_else(|| user_response.login.clone());
 
-    let check_query = "SELECT id, name, email, password, created_at FROM users WHERE email = $1";
-    let existing_user: Option<User> = sqlx::query_as(check_query)
-        .bind(&email)
-        .fetch_optional(pool.as_ref())
+    let existing_user = users::Entity::find()
+        .filter(users::Column::Email.eq(&email))
+        .one(pool.as_ref())
         .await
         .map_err(|e| AppError::Database(e.to_string()))?;
 
     let user_id = if let Some(user) = existing_user {
         user.id
     } else {
-        let insert_query =
-            "INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id";
-        let new_user: User = sqlx::query_as(insert_query)
-            .bind(&name)
-            .bind(&email)
-            .bind("github_oauth")
-            .fetch_one(pool.as_ref())
+        let new_user = users::ActiveModel {
+            username: Set(name),
+            email: Set(email),
+            password: Set("github_oauth".to_string()),
+            ..Default::default()
+        };
+        let res = new_user
+            .insert(pool.as_ref())
             .await
             .map_err(|e| AppError::Database(e.to_string()))?;
-        new_user.id
+        res.id
     };
 
     let token = generate_token(user_id)?;

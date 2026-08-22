@@ -1,8 +1,9 @@
 use actix_web::web;
+use sea_orm::{ActiveModelTrait, Set};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    app::db::DbPool,
+    app::{db::DbPool, models::github_repos},
     app_errors::AppError,
 };
 
@@ -57,11 +58,13 @@ pub async fn github_webhook_installation(
 
     println!("installation_id: {:?}", installation_id);
 
-    let query = r#"INSERT INTO github_repos (installation_ids) VALUES ($1)"#;
+    let new_repo = github_repos::ActiveModel {
+        installation_ids: Set(installation_id),
+        ..Default::default()
+    };
 
-    sqlx::query(query)
-        .bind(installation_id)
-        .execute(pool.as_ref())
+    new_repo
+        .insert(pool.as_ref())
         .await
         .map_err(|_| AppError::InternalServerError)?;
 

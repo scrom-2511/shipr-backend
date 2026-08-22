@@ -1,9 +1,10 @@
-use actix_web::{HttpMessage, HttpRequest, HttpResponse, web};
+use actix_web::{web, HttpMessage, HttpRequest, HttpResponse};
+use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
 use serde::Deserialize;
 
 use crate::{
     app::{
-        controllers::{ApiResponse, auth::decode_token},
+        controllers::{auth::decode_token, ApiResponse},
         db::DbPool,
         middlewares::AuthMiddleware,
     },
@@ -30,12 +31,13 @@ pub async fn update_userid_github_app_installations(
         return Err(AppError::InvalidCredentials);
     }
 
-    let query = r#"UPDATE github_repos SET user_id = $1 WHERE $2 = ANY(installation_ids)"#;
+    let stmt = Statement::from_sql_and_values(
+        DatabaseBackend::Postgres,
+        "UPDATE github_repos SET user_id = $1 WHERE $2 = ANY(installation_ids)",
+        vec![user_id.into(), body.installation_id.into()],
+    );
 
-    let _execute = sqlx::query(query)
-        .bind(user_id)
-        .bind(body.installation_id)
-        .execute(pool.as_ref())
+    pool.execute(stmt)
         .await
         .map_err(|_| AppError::InternalServerError)?;
 

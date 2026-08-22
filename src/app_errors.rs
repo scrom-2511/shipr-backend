@@ -1,7 +1,7 @@
 
 use actix_web::{HttpResponse, ResponseError, http::StatusCode};
 use aws_sdk_s3::presigning::PresigningConfigError;
-use sqlx::error::Error as SqlxError;
+use sea_orm::DbErr;
 
 use crate::app::controllers::ApiResponse;
 
@@ -21,8 +21,8 @@ pub enum AppError {
     #[error("serde json error: {0}")]
     SerdeJson(#[from] serde_json::Error),
 
-    #[error("SQLx error: {0}")]
-    SqlxError(#[from] SqlxError),
+    #[error("Database error: {0}")]
+    DbErr(#[from] DbErr),
 
     #[error("reqwest error: {0}")]
     Reqwest(#[from] reqwest::Error),

@@ -1,10 +1,11 @@
-use actix_web::{HttpMessage, HttpRequest, HttpResponse, web};
+use actix_web::{web, HttpMessage, HttpRequest, HttpResponse};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::Serialize;
 
 use crate::{
     app::{
         controllers::ApiResponse, db::DbPool, middlewares::AuthMiddleware,
-        models::GithubAppInstallation,
+        models::github_repos,
     },
     app_errors::AppError,
     shared::github_app::GithubApp,
@@ -29,11 +30,9 @@ pub async fn get_all_github_app_installed_repos(
 ) -> Result<HttpResponse, AppError> {
     let user_id = req.extensions().get::<AuthMiddleware>().unwrap().user_id;
 
-    let query = r#"SELECT installation_ids, id, user_id FROM github_repos WHERE user_id = $1"#;
-
-    let github_app_installations: Vec<GithubAppInstallation> = sqlx::query_as(query)
-        .bind(user_id)
-        .fetch_all(pool.as_ref())
+    let github_app_installations = github_repos::Entity::find()
+        .filter(github_repos::Column::UserId.eq(user_id))
+        .all(pool.as_ref())
         .await
         .map_err(|e| {
             println!("DB ERROR: {:?}", e);

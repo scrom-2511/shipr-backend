@@ -48,15 +48,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let db_url = "postgresql://neondb_owner:npg_RlYICzb47Sps@ep-weathered-mode-aqn5uvc3-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require";
 
-    println!("{}", db_url);
-
-    let pool = sqlx::postgres::PgPool::connect(db_url).await?;
+    let pool = sea_orm::Database::connect(db_url).await?;
 
     println!("Connected to database");
 
-    sqlx::migrate!("src/app/migrations").run(&pool).await?;
+    use sea_orm_migration::MigratorTrait;
+    use shipr::app::migrations::Migrator;
 
-    println!("Migrations applied");
+    Migrator::up(&pool, None).await?;
+
+    println!("Migrations applied successfully");
 
     println!("Server running on port 9000");
 

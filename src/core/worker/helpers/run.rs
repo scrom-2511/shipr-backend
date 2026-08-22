@@ -5,7 +5,7 @@ use tokio::net::TcpStream;
 use crate::{
     app_errors::AppError,
     core::{
-        app_types::{DeployDetails, RunDetails, ShiprJson},
+        app_types::{RunDetails, ShiprJson},
         config::{app_config::get_worker_dir, project_default_config::get_default_config},
         infra::{
             detect::detect_project_type,

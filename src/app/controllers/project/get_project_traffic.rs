@@ -1,11 +1,12 @@
 use crate::app::controllers::ApiResponse;
 use crate::app::db::DbPool;
 use crate::app::middlewares::AuthMiddleware;
+use crate::app::models::project_traffic;
 use crate::app_errors::AppError;
-use actix_web::{HttpMessage, HttpRequest, HttpResponse, web};
+use actix_web::{web, HttpMessage, HttpRequest, HttpResponse};
+use chrono::{Datelike, Duration, Utc};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
 use serde::Serialize;
-use sqlx::FromRow;
-use chrono::{Duration, Utc, Datelike};
 use std::collections::HashMap;
 
 #[derive(serde::Deserialize)]
@@ -13,15 +14,9 @@ pub struct GetProjectTrafficQuery {
     pub project_id: i32,
 }
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize)]
 pub struct TrafficData {
     pub day: String,
-    pub value: i32,
-}
-
-#[derive(FromRow)]
-struct DbTrafficRow {
-    pub date: chrono::NaiveDate,
     pub value: i32,
 }
 
@@ -45,19 +40,14 @@ pub async fn get_project_traffic_controller(
         .user_id;
 
     let project_id = query.project_id;
+    let today = Utc::now().naive_utc().date();
+    let seven_days_ago = today - Duration::days(7);
 
-    let query_str = r#"
-        SELECT 
-            date,
-            request_count as value
-        FROM project_traffic
-        WHERE project_id = $1 AND date > CURRENT_DATE - INTERVAL '7 days'
-        ORDER BY date ASC
-    "#;
-
-    let rows: Vec<DbTrafficRow> = sqlx::query_as(query_str)
-        .bind(project_id)
-        .fetch_all(pool.as_ref())
+    let rows = project_traffic::Entity::find()
+        .filter(project_traffic::Column::ProjectId.eq(project_id))
+        .filter(project_traffic::Column::Date.gt(seven_days_ago))
+        .order_by_asc(project_traffic::Column::Date)
+        .all(pool.as_ref())
         .await
         .map_err(|e| {
             println!("Database error: {}", e);
@@ -66,11 +56,10 @@ pub async fn get_project_traffic_controller(
 
     let traffic_map: HashMap<chrono::NaiveDate, i32> = rows
         .into_iter()
-        .map(|r| (r.date, r.value))
+        .map(|r| (r.date, r.request_count))
         .collect();
 
     let mut result = Vec::new();
-    let today = Utc::now().naive_utc().date();
 
     for i in (0..7).rev() {
         let date = today - Duration::days(i as i64);

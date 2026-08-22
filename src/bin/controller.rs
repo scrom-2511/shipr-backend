@@ -15,7 +15,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("failed to install rustls crypto provider");
 
     let db_url = "postgresql://neondb_owner:npg_RlYICzb47Sps@ep-weathered-mode-aqn5uvc3-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require";
-    let pool = sqlx::postgres::PgPool::connect(db_url).await?;
+    let pool = sea_orm::Database::connect(db_url).await?;
 
     let redis = Redis::new().await;
     let id_allocator = IdAllocator::new(redis.clone());

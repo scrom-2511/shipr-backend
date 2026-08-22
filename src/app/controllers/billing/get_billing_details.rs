@@ -1,27 +1,13 @@
 use crate::app::controllers::ApiResponse;
 use crate::app::db::DbPool;
 use crate::app::middlewares::AuthMiddleware;
+use crate::app::models::{billing_invoices, payment_methods, projects, users};
 use crate::app_errors::AppError;
 
-use actix_web::{HttpMessage, HttpRequest, HttpResponse, web};
+use actix_web::{web, HttpMessage, HttpRequest, HttpResponse};
 use chrono::NaiveDateTime;
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
 use serde::Serialize;
-use sqlx::FromRow;
-
-#[derive(Debug, FromRow)]
-struct UserBillingInfoRow {
-    credit_balance: Option<f64>,
-    plan_tier: Option<String>,
-}
-
-#[derive(Debug, FromRow)]
-struct ProjectUsageRow {
-    id: i32,
-    project_id: String,
-    full_name: String,
-    status: String,
-    active_seconds: Option<i64>,
-}
 
 #[derive(Debug, Serialize)]
 pub struct ProjectBillingUsage {
@@ -35,7 +21,7 @@ pub struct ProjectBillingUsage {
     pub cost: f64,
 }
 
-#[derive(Debug, FromRow, Serialize)]
+#[derive(Debug, Serialize)]
 pub struct InvoiceItem {
     pub id: i32,
     pub invoice_number: String,
@@ -48,7 +34,7 @@ pub struct InvoiceItem {
     pub created_at: Option<NaiveDateTime>,
 }
 
-#[derive(Debug, FromRow, Serialize)]
+#[derive(Debug, Serialize)]
 pub struct PaymentMethodItem {
     pub id: i32,
     pub card_brand: String,
@@ -85,36 +71,30 @@ pub async fn get_billing_details_controller(
         .user_id;
 
     // Fetch user info
-    let user_info: Option<UserBillingInfoRow> =
-        sqlx::query_as("SELECT credit_balance, plan_tier FROM users WHERE id = $1")
-            .bind(user_id)
-            .fetch_optional(pool.as_ref())
-            .await
-            .map_err(|e| AppError::Database(e.to_string()))?;
+    let user_info = users::Entity::find_by_id(user_id)
+        .one(pool.as_ref())
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
 
-    let credit_balance = user_info
-        .as_ref()
-        .and_then(|u| u.credit_balance)
-        .unwrap_or(50.0);
+    let credit_balance = user_info.as_ref().map(|u| u.credit_balance).unwrap_or(50.0);
     let plan_name = user_info
         .as_ref()
-        .and_then(|u| u.plan_tier.clone())
+        .map(|u| u.plan_tier.clone())
         .unwrap_or_else(|| "Developer".to_string());
 
     // Fetch project usage
-    let project_rows: Vec<ProjectUsageRow> = sqlx::query_as(
-        "SELECT id, project_id, full_name, status, active_seconds FROM projects WHERE user_id = $1 ORDER BY created_at DESC",
-    )
-    .bind(user_id)
-    .fetch_all(pool.as_ref())
-    .await
-    .map_err(|e| AppError::Database(e.to_string()))?;
+    let project_rows = projects::Entity::find()
+        .filter(projects::Column::UserId.eq(user_id))
+        .order_by_desc(projects::Column::CreatedAt)
+        .all(pool.as_ref())
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
 
     let mut total_active_seconds: i64 = 0;
     let mut projects: Vec<ProjectBillingUsage> = Vec::new();
 
     for p in project_rows {
-        let secs = p.active_seconds.unwrap_or(3600);
+        let secs = p.active_seconds;
         total_active_seconds += secs;
         let hours = secs as f64 / 3600.0;
         let cost = (hours * HOURLY_RATE * 10000.0).round() / 10000.0;
@@ -140,62 +120,101 @@ pub async fn get_billing_details_controller(
     };
 
     // Ensure payment method exists
-    let mut payment_method: Option<PaymentMethodItem> = sqlx::query_as(
-        "SELECT id, card_brand, last4, exp_month, exp_year, is_default FROM payment_methods WHERE user_id = $1 AND is_default = true LIMIT 1",
-    )
-    .bind(user_id)
-    .fetch_optional(pool.as_ref())
-    .await
-    .map_err(|e| AppError::Database(e.to_string()))?;
-
-    if payment_method.is_none() {
-        let _ = sqlx::query(
-            "INSERT INTO payment_methods (user_id, card_brand, last4, exp_month, exp_year, is_default) VALUES ($1, 'Visa', '4242', 12, 2028)",
-        )
-        .bind(user_id)
-        .execute(pool.as_ref())
-        .await;
-
-        payment_method = sqlx::query_as(
-            "SELECT id, card_brand, last4, exp_month, exp_year, is_default FROM payment_methods WHERE user_id = $1 AND is_default = true LIMIT 1",
-        )
-        .bind(user_id)
-        .fetch_optional(pool.as_ref())
+    let mut payment_method_model = payment_methods::Entity::find()
+        .filter(payment_methods::Column::UserId.eq(user_id))
+        .filter(payment_methods::Column::IsDefault.eq(true))
+        .one(pool.as_ref())
         .await
         .map_err(|e| AppError::Database(e.to_string()))?;
+
+    if payment_method_model.is_none() {
+        let new_pm = payment_methods::ActiveModel {
+            user_id: Set(user_id),
+            card_brand: Set("Visa".to_string()),
+            last4: Set("4242".to_string()),
+            exp_month: Set(12),
+            exp_year: Set(2028),
+            is_default: Set(true),
+            ..Default::default()
+        };
+        let _ = new_pm.insert(pool.as_ref()).await;
+
+        payment_method_model = payment_methods::Entity::find()
+            .filter(payment_methods::Column::UserId.eq(user_id))
+            .filter(payment_methods::Column::IsDefault.eq(true))
+            .one(pool.as_ref())
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
     }
 
+    let payment_method = payment_method_model.map(|pm| PaymentMethodItem {
+        id: pm.id,
+        card_brand: pm.card_brand,
+        last4: pm.last4,
+        exp_month: pm.exp_month,
+        exp_year: pm.exp_year,
+        is_default: pm.is_default,
+    });
+
     // Fetch invoices
-    let mut invoices: Vec<InvoiceItem> = sqlx::query_as(
-        "SELECT id, invoice_number, amount, status, active_hours, rate_per_hour, period_start, period_end, created_at FROM billing_invoices WHERE user_id = $1 ORDER BY created_at DESC",
-    )
-    .bind(user_id)
-    .fetch_all(pool.as_ref())
-    .await
-    .map_err(|e| AppError::Database(e.to_string()))?;
+    let invoice_models = billing_invoices::Entity::find()
+        .filter(billing_invoices::Column::UserId.eq(user_id))
+        .order_by_desc(billing_invoices::Column::CreatedAt)
+        .all(pool.as_ref())
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+    let mut invoices: Vec<InvoiceItem> = invoice_models
+        .into_iter()
+        .map(|inv| InvoiceItem {
+            id: inv.id,
+            invoice_number: inv.invoice_number,
+            amount: inv.amount,
+            status: inv.status,
+            active_hours: inv.active_hours,
+            rate_per_hour: inv.rate_per_hour,
+            period_start: inv.period_start,
+            period_end: inv.period_end,
+            created_at: inv.created_at,
+        })
+        .collect();
 
     // Seed initial invoice if empty
     if invoices.is_empty() {
         let inv_num = format!("INV-2026-{:04}", user_id * 10 + 1);
         let initial_amount = current_month_cost;
-        let _ = sqlx::query(
-            "INSERT INTO billing_invoices (user_id, invoice_number, amount, status, active_hours, rate_per_hour) VALUES ($1, $2, $3, 'paid', $4, $5)",
-        )
-        .bind(user_id)
-        .bind(&inv_num)
-        .bind(initial_amount)
-        .bind(total_active_hours)
-        .bind(HOURLY_RATE)
-        .execute(pool.as_ref())
-        .await;
+        let new_inv = billing_invoices::ActiveModel {
+            user_id: Set(user_id),
+            invoice_number: Set(inv_num),
+            amount: Set(initial_amount),
+            status: Set("paid".to_string()),
+            active_hours: Set(total_active_hours),
+            rate_per_hour: Set(HOURLY_RATE),
+            ..Default::default()
+        };
+        let _ = new_inv.insert(pool.as_ref()).await;
 
-        invoices = sqlx::query_as(
-            "SELECT id, invoice_number, amount, status, active_hours, rate_per_hour, period_start, period_end, created_at FROM billing_invoices WHERE user_id = $1 ORDER BY created_at DESC",
-        )
-        .bind(user_id)
-        .fetch_all(pool.as_ref())
-        .await
-        .map_err(|e| AppError::Database(e.to_string()))?;
+        let invoice_models = billing_invoices::Entity::find()
+            .filter(billing_invoices::Column::UserId.eq(user_id))
+            .order_by_desc(billing_invoices::Column::CreatedAt)
+            .all(pool.as_ref())
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        invoices = invoice_models
+            .into_iter()
+            .map(|inv| InvoiceItem {
+                id: inv.id,
+                invoice_number: inv.invoice_number,
+                amount: inv.amount,
+                status: inv.status,
+                active_hours: inv.active_hours,
+                rate_per_hour: inv.rate_per_hour,
+                period_start: inv.period_start,
+                period_end: inv.period_end,
+                created_at: inv.created_at,
+            })
+            .collect();
     }
 
     let response = BillingDetailsResponse {

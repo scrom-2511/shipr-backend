@@ -1,12 +1,13 @@
-use actix_web::{HttpResponse, cookie::SameSite, web};
+use actix_web::{cookie::SameSite, web, HttpResponse};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
 use crate::{
     app::{
-        controllers::{ApiResponse, auth::generate_token},
+        controllers::{auth::generate_token, ApiResponse},
         db::DbPool,
-        models::User,
+        models::users,
     },
     app_errors::AppError,
 };
@@ -34,13 +35,12 @@ pub async fn signin_controller(
 
     println!("Valid credentials");
 
-    let query = r#"SELECT id, username, email, password, created_at FROM users WHERE email = $1"#;
-
-    let user = sqlx::query_as::<_, User>(query)
-        .bind(&signin.email)
-        .fetch_one(pool.as_ref())
+    let user = users::Entity::find()
+        .filter(users::Column::Email.eq(&signin.email))
+        .one(pool.as_ref())
         .await
-        .map_err(|_| AppError::UserNotFound)?;
+        .map_err(|e| AppError::Database(e.to_string()))?
+        .ok_or(AppError::UserNotFound)?;
 
     println!("User found");
 

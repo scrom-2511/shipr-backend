@@ -1,8 +1,9 @@
-use actix_web::{HttpResponse, web};
+use actix_web::{web, HttpResponse};
+use sea_orm::{ActiveModelTrait, EntityTrait, Set};
 use serde::Deserialize;
 
 use crate::{
-    app::{controllers::ApiResponse, db::DbPool},
+    app::{controllers::ApiResponse, db::DbPool, models::projects},
     app_errors::AppError,
 };
 
@@ -23,19 +24,24 @@ pub async fn edit_project_details_controller(
     pool: web::Data<DbPool>,
     body: web::Json<EditProjectBody>,
 ) -> Result<HttpResponse, AppError> {
-    let query = "UPDATE projects SET url = $2, project_id = $1, branch = $3, root_dir = $4, dist_dir = $5, install_cmds = $6, build_cmds = $7, run_cmds = $8 WHERE id = $9";
+    let project = projects::Entity::find_by_id(body.id)
+        .one(pool.as_ref())
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?
+        .ok_or_else(|| AppError::Database("Project not found".to_string()))?;
 
-    sqlx::query(query)
-        .bind(&body.name)
-        .bind(&body.url)
-        .bind(&body.branch)
-        .bind(&body.root_dir)
-        .bind(&body.dist_dir)
-        .bind(&body.install_cmds)
-        .bind(&body.build_cmds)
-        .bind(&body.run_cmds)
-        .bind(body.id)
-        .execute(pool.as_ref())
+    let mut active_project: projects::ActiveModel = project.into();
+    active_project.project_id = Set(body.name.clone());
+    active_project.url = Set(Some(body.url.clone()));
+    active_project.branch = Set(Some(body.branch.clone()));
+    active_project.root_dir = Set(body.root_dir.clone());
+    active_project.dist_dir = Set(Some(body.dist_dir.clone()));
+    active_project.install_cmds = Set(body.install_cmds.clone());
+    active_project.build_cmds = Set(body.build_cmds.clone());
+    active_project.run_cmds = Set(body.run_cmds.clone());
+
+    active_project
+        .update(pool.as_ref())
         .await
         .map_err(|e| {
             println!("DB ERROR: {:?}", e);

@@ -4,6 +4,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 use url::Url;
 
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+
 use crate::app::db::DbPool;
 use crate::app_errors::AppError;
 use crate::core::app_types::{DeployDetails, EnvVar, JobType, RedeployDetails, RunDetails};
@@ -193,14 +195,17 @@ impl JobDispatcher {
             .get_or_create_vm(&redeploy_details.project_id, &JobType::Redeploy)
             .await?;
 
-        let row: (Option<Vec<String>>,) =
-            sqlx::query_as("SELECT envs FROM projects WHERE project_id = $1")
-                .bind(&redeploy_details.project_id)
-                .fetch_one(&self.pool)
-                .await
-                .map_err(|e| AppError::Database(e.to_string()))?;
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+        let project = crate::app::models::projects::Entity::find()
+            .filter(
+                crate::app::models::projects::Column::ProjectId.eq(&redeploy_details.project_id),
+            )
+            .one(&self.pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?
+            .ok_or_else(|| AppError::Database("Project not found".to_string()))?;
 
-        let envs: Option<Vec<EnvVar>> = match row.0 {
+        let envs: Option<Vec<EnvVar>> = match project.envs {
             Some(encrypted_envs_vec) => {
                 if let Some(encrypted_envs) = encrypted_envs_vec.first() {
                     let decrypted = crate::shared::crypto::Crypto::decrypt(encrypted_envs);
@@ -266,16 +271,14 @@ impl JobDispatcher {
 
             println!("presigned download url is: {}", presigned_download_url);
 
-            let row: (Option<Vec<String>>,) =
-                sqlx::query_as("SELECT envs FROM projects WHERE project_id = $1")
-                    .bind(project_id)
-                    .fetch_one(&self.pool)
-                    .await
-                    .map_err(|e| AppError::Database(e.to_string()))?;
+            let project = crate::app::models::projects::Entity::find()
+                .filter(crate::app::models::projects::Column::ProjectId.eq(project_id))
+                .one(&self.pool)
+                .await
+                .map_err(|e| AppError::Database(e.to_string()))?
+                .ok_or_else(|| AppError::Database("Project not found".to_string()))?;
 
-            println!("row is: {:?}", row);
-
-            let envs: Option<Vec<EnvVar>> = match row.0 {
+            let envs: Option<Vec<EnvVar>> = match project.envs {
                 Some(encrypted_envs_vec) => {
                     if let Some(encrypted_envs) = encrypted_envs_vec.first() {
                         let decrypted = crate::shared::crypto::Crypto::decrypt(encrypted_envs);

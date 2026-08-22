@@ -78,16 +78,16 @@ impl VmRequestProxy {
             return Ok((project_id_str.to_string(), numeric_id, uri));
         }
 
-        let query = "SELECT project_id, id FROM projects WHERE project_id = $1";
-
-        let row: (String, i32) = sqlx::query_as(query)
-            .bind(&name)
-            .fetch_optional(&self.pool)
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+        let project = crate::app::models::projects::Entity::find()
+            .filter(crate::app::models::projects::Column::ProjectId.eq(&name))
+            .one(&self.pool)
             .await
             .map_err(|e| AppError::Database(e.to_string()))?
             .ok_or_else(|| AppError::Database(format!("Project with name {} not found", name)))?;
 
-        let (project_id_str, numeric_id) = row;
+        let project_id_str = project.project_id;
+        let numeric_id = project.id;
 
         let cache_val = format!("{}:{}", project_id_str, numeric_id);
         let _: () = conn.set_ex(&cache_key, &cache_val, 3600).await?;
@@ -220,18 +220,34 @@ impl VmRequestProxy {
     }
 
     async fn track_traffic(&self, project_id: i32) -> Result<(), AppError> {
-        let query = r#"
-            INSERT INTO project_traffic (project_id, date, request_count)
-            VALUES ($1, CURRENT_DATE, 1)
-            ON CONFLICT (project_id, date)
-            DO UPDATE SET request_count = project_traffic.request_count + 1
-        "#;
+        use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
+        use crate::app::models::project_traffic;
 
-        sqlx::query(query)
-            .bind(project_id)
-            .execute(&self.pool)
+        let today = chrono::Utc::now().naive_utc().date();
+
+        let traffic = project_traffic::Entity::find()
+            .filter(project_traffic::Column::ProjectId.eq(project_id))
+            .filter(project_traffic::Column::Date.eq(today))
+            .one(&self.pool)
             .await
             .map_err(|e| AppError::Database(e.to_string()))?;
+
+        match traffic {
+            Some(t) => {
+                let mut active: project_traffic::ActiveModel = t.into();
+                active.request_count = Set(active.request_count.unwrap() + 1);
+                active.update(&self.pool).await.map_err(|e| AppError::Database(e.to_string()))?;
+            }
+            None => {
+                let new_traffic = project_traffic::ActiveModel {
+                    project_id: Set(project_id),
+                    date: Set(today),
+                    request_count: Set(1),
+                    ..Default::default()
+                };
+                new_traffic.insert(&self.pool).await.map_err(|e| AppError::Database(e.to_string()))?;
+            }
+        }
 
         Ok(())
     }

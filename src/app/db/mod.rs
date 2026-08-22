@@ -1,3 +1,1 @@
-use sqlx::postgres::PgPool;
-
-pub type DbPool = PgPool;
+pub type DbPool = sea_orm::DatabaseConnection;

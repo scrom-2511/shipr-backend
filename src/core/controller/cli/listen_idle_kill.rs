@@ -1,5 +1,4 @@
 use actix_web::web;
-use chrono::format::Numeric;
 use lapin::options::BasicAckOptions;
 use redis::AsyncCommands;
 use std::time::Duration;
@@ -104,20 +103,17 @@ pub async fn listen_idle_kill(
                 idle_req.project_id, total_active_time
             );
 
-            let _ = sqlx::query(
-                r#"
-                    UPDATE projects
-                    SET active_seconds = COALESCE(active_seconds, 0) + $1,
-                        status = 'stopped',
-                        updated_at = NOW()
-                    WHERE id = $2
-                    "#,
-            )
-            .bind(total_active_time)
-            .bind(numeric_id)
-            .execute(pool.get_ref())
-            .await
-            .unwrap();
+            use sea_orm::{ActiveModelTrait, EntityTrait, Set};
+            use crate::app::models::projects;
+
+            if let Ok(Some(project)) = projects::Entity::find_by_id(numeric_id).one(pool.get_ref()).await {
+                let new_active_seconds = project.active_seconds + total_active_time;
+                let mut active_project: projects::ActiveModel = project.into();
+                active_project.active_seconds = Set(new_active_seconds);
+                active_project.status = Set("stopped".to_string());
+                active_project.updated_at = Set(Some(chrono::Utc::now().naive_utc()));
+                let _ = active_project.update(pool.get_ref()).await;
+            }
 
             let _: () = redis_conn
                 .del(format!("project:vm_start_time:{}", idle_req.project_id))

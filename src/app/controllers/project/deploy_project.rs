@@ -1,25 +1,23 @@
 use actix_web::{
-    HttpMessage, HttpRequest, HttpResponse,
     web::{self},
+    HttpMessage, HttpRequest, HttpResponse,
 };
-use serde::{Deserialize, Serialize};
-use sqlx::prelude::FromRow;
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
 use crate::{
-    app::{controllers::ApiResponse, db::DbPool, middlewares::AuthMiddleware},
+    app::{
+        controllers::ApiResponse,
+        db::DbPool,
+        middlewares::AuthMiddleware,
+        models::{github_repos, projects},
+    },
     app_errors::AppError,
     core::{app_types::DeployReq, controller::queue::deploy_queue::DeployQueue},
 };
 
-#[derive(Serialize, Deserialize, FromRow)]
-struct InstallationIds {
-    installation_ids: Vec<i32>,
-}
-
 pub async fn deploy_project_controller(
     body: web::Json<DeployReq>,
     deploy_queue: web::Data<DeployQueue>,
-    // logs_store: LogsStore,
     pool: web::Data<DbPool>,
     req: HttpRequest,
 ) -> Result<HttpResponse, AppError> {
@@ -27,40 +25,21 @@ pub async fn deploy_project_controller(
 
     println!("Deploy details: {:?}", body);
 
-    // let _project_id = &body.project_id;
-
-    // let (tx, _) = channel::<String>(100);
-
-    // let file_path = "/home/scrom/code/shipr/shipr-backend/logs";
-
-    // fs::create_dir_all(file_path).unwrap();
-
-    // fs::File::create(format!("{}/{}.txt", file_path, project_id)).unwrap();
-
-    // logs_store.lock().await.insert(project_id.clone(), tx);
-
-    // println!("{:?}", logs_store.lock().await.keys());
-
     let user_id = req.extensions().get::<AuthMiddleware>().unwrap().user_id;
 
-    let query_to_check_installation_id =
-        "SELECT installation_ids FROM github_repos WHERE user_id = $1";
-
-    let installation_id: Option<InstallationIds> = sqlx::query_as(query_to_check_installation_id)
-        .bind(user_id)
-        .fetch_optional(pool.as_ref())
+    let github_repo = github_repos::Entity::find()
+        .filter(github_repos::Column::UserId.eq(user_id))
+        .one(pool.as_ref())
         .await
         .map_err(|e| AppError::Database(e.to_string()))?;
 
-    if installation_id.is_none() {
-        return Err(AppError::Database("Installation id not found".to_string()));
-    }
+    let installation_repo =
+        github_repo.ok_or_else(|| AppError::Database("Installation id not found".to_string()))?;
 
-    let installation_ids = installation_id.unwrap().installation_ids;
-
-    let exists = installation_ids.contains(&(body.installation_id as i32));
-
-    if !exists {
+    if !installation_repo
+        .installation_ids
+        .contains(&(body.installation_id as i32))
+    {
         return Err(AppError::Database("Installation id not found".to_string()));
     }
 
@@ -73,20 +52,24 @@ pub async fn deploy_project_controller(
         crate::shared::crypto::Crypto::encrypt(&json)
     }];
 
-    let query = "INSERT INTO projects (project_id, status, root_dir, full_name, user_id, last_deployment_time, created_at, updated_at, branch, envs) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)";
+    let now = chrono::Utc::now().naive_utc();
 
-    sqlx::query(query)
-        .bind(&body.project_id)
-        .bind("deploying")
-        .bind(&body.root_dir)
-        .bind(&body.full_name)
-        .bind(user_id)
-        .bind(chrono::Utc::now())
-        .bind(chrono::Utc::now())
-        .bind(chrono::Utc::now())
-        .bind(&body.branch)
-        .bind(envs)
-        .execute(pool.as_ref())
+    let new_project = projects::ActiveModel {
+        project_id: Set(body.project_id.clone()),
+        status: Set("deploying".to_string()),
+        root_dir: Set(body.root_dir.clone()),
+        full_name: Set(body.full_name.clone()),
+        user_id: Set(user_id),
+        last_deployment_time: Set(Some(now)),
+        created_at: Set(Some(now)),
+        updated_at: Set(Some(now)),
+        branch: Set(Some(body.branch.clone())),
+        envs: Set(Some(envs)),
+        ..Default::default()
+    };
+
+    new_project
+        .insert(pool.as_ref())
         .await
         .map_err(|e| AppError::Database(e.to_string()))?;
 

@@ -1,19 +1,21 @@
+use crate::app::controllers::ApiResponse;
 use crate::app::db::DbPool;
 use crate::app::middlewares::AuthMiddleware;
+use crate::app::models::projects;
 use crate::app_errors::AppError;
+use crate::core::app_types::ProjectType;
 use crate::core::config::project_default_config::get_default_config;
-use crate::{app::controllers::ApiResponse, core::app_types::ProjectType};
-use actix_web::{HttpMessage, HttpRequest, HttpResponse, web};
+use actix_web::{web, HttpMessage, HttpRequest, HttpResponse};
 use chrono::NaiveDateTime;
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::Serialize;
-use sqlx::FromRow;
 
 #[derive(serde::Deserialize)]
 pub struct GetProjectDetailsQuery {
     pub project_id: i32,
 }
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize)]
 pub struct ProjectDetail {
     pub id: i32,
     pub project_id: String,
@@ -27,23 +29,6 @@ pub struct ProjectDetail {
     pub run_cmds: Vec<String>,
     pub github_url: String,
     pub commit_hash: String,
-}
-
-#[derive(FromRow)]
-struct ProjectRow {
-    pub id: i32,
-    pub project_id: String,
-    pub full_name: String,
-    pub branch: Option<String>,
-    pub status: String,
-    pub last_deployment_time: Option<NaiveDateTime>,
-    pub root_dir: String,
-    pub install_cmds: Option<Vec<String>>,
-    pub build_cmds: Option<Vec<String>>,
-    pub run_cmds: Option<Vec<String>>,
-    pub url: Option<String>,
-    pub commit_hash: Option<String>,
-    pub project_type: Option<ProjectType>,
 }
 
 pub async fn get_project_details_controller(
@@ -69,19 +54,10 @@ pub async fn get_project_details_controller(
 
     let project_id = query.project_id;
 
-    let query_str = r#"
-        SELECT 
-            id, project_id, full_name, branch, status::text as status, last_deployment_time, 
-            root_dir, dist_dir, install_cmds, build_cmds, run_cmds, 
-            url, commit_hash, project_type
-        FROM projects 
-        WHERE id = $1 AND user_id = $2
-    "#;
-
-    let row: ProjectRow = sqlx::query_as(query_str)
-        .bind(project_id)
-        .bind(user_id)
-        .fetch_optional(pool.as_ref())
+    let row = projects::Entity::find()
+        .filter(projects::Column::Id.eq(project_id))
+        .filter(projects::Column::UserId.eq(user_id))
+        .one(pool.as_ref())
         .await
         .map_err(|e| {
             println!("Database error: {}", e);
@@ -99,8 +75,10 @@ pub async fn get_project_details_controller(
         _ => "error",
     };
 
+    let p_type = row.project_type.unwrap_or(ProjectType::Unknown);
+
     let install_cmds = if row.install_cmds.is_none() {
-        let install_cmds = get_default_config(&row.project_type.unwrap())
+        let install_cmds = get_default_config(&p_type)
             .install_commands
             .into_iter()
             .map(String::from)
@@ -111,7 +89,7 @@ pub async fn get_project_details_controller(
     };
 
     let build_cmds = if row.build_cmds.is_none() {
-        let build_cmds = get_default_config(&row.project_type.unwrap())
+        let build_cmds = get_default_config(&p_type)
             .build_commands
             .into_iter()
             .map(String::from)
@@ -122,9 +100,9 @@ pub async fn get_project_details_controller(
     };
 
     let run_cmds = if row.run_cmds.is_none() {
-        let run_cmds = get_default_config(&row.project_type.unwrap())
+        let run_cmds = get_default_config(&p_type)
             .run_commands
-            .unwrap()
+            .unwrap_or_default()
             .into_iter()
             .map(String::from)
             .collect();
@@ -143,9 +121,9 @@ pub async fn get_project_details_controller(
             .last_deployment_time
             .unwrap_or_else(|| chrono::Utc::now().naive_utc()),
         root_dir: row.root_dir,
-        install_cmds: install_cmds.unwrap(),
-        build_cmds: build_cmds.unwrap(),
-        run_cmds: run_cmds.unwrap(),
+        install_cmds: install_cmds.unwrap_or_default(),
+        build_cmds: build_cmds.unwrap_or_default(),
+        run_cmds: run_cmds.unwrap_or_default(),
         github_url: row.url.unwrap_or_default(),
         commit_hash: row.commit_hash.unwrap_or_default(),
     };

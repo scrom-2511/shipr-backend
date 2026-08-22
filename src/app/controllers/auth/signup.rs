@@ -1,8 +1,9 @@
+use crate::app::models::users;
 use crate::app::{controllers::ApiResponse, db::DbPool};
 use crate::app_errors::AppError;
 use actix_web::{HttpResponse, web};
+use sea_orm::{ActiveModelTrait, Set};
 use serde::{Deserialize, Serialize};
-use sqlx::Error;
 use validator::Validate;
 
 #[derive(Debug, Deserialize, Validate, Serialize)]
@@ -37,30 +38,29 @@ pub async fn signup_controller(
     let hashed_password =
         bcrypt::hash(&signup.password, 10).map_err(|_| AppError::InternalServerError)?;
 
-    let query = "INSERT INTO users (username, email, password) VALUES ($1, $2, $3)";
+    let new_user = users::ActiveModel {
+        username: Set(signup.username.clone()),
+        email: Set(signup.email.clone()),
+        password: Set(hashed_password),
+        ..Default::default()
+    };
 
-    let result = sqlx::query(query)
-        .bind(&signup.username)
-        .bind(&signup.email)
-        .bind(&hashed_password)
-        .execute(pool.as_ref())
-        .await;
-
-    match result {
+    match new_user.insert(pool.as_ref()).await {
         Ok(_) => Ok(HttpResponse::Created().json(ApiResponse::<()> {
             success: true,
             message: "User created successfully".to_string(),
             data: None,
         })),
-        Err(Error::Database(db_err)) => {
-            if let Some(code) = db_err.code() {
-                match code.as_ref() {
-                    "23505" => return Err(AppError::UserAlreadyExists(signup.email)),
-                    _ => return Err(AppError::Database(db_err.to_string())),
-                }
+        Err(e) => {
+            let err_str = e.to_string();
+            if err_str.contains("23505")
+                || err_str.contains("users_email_key")
+                || err_str.contains("UNIQUE constraint")
+            {
+                Err(AppError::UserAlreadyExists(signup.email))
+            } else {
+                Err(AppError::Database(err_str))
             }
-            Err(AppError::Database(db_err.to_string()))
         }
-        Err(_) => Err(AppError::Database("Something went wrong".to_string())),
     }
 }
