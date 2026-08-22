@@ -8,6 +8,8 @@ use shipr::app::controllers::auth::signin::signin_controller;
 use shipr::app::controllers::auth::signup::signup_controller;
 use shipr::app::controllers::billing::add_credits::add_credits_controller;
 use shipr::app::controllers::billing::get_billing_details::get_billing_details_controller;
+use shipr::app::controllers::billing::stripe_checkout::checkout_controller;
+use shipr::app::controllers::billing::stripe_webhook::stripe_webhook_controller;
 use shipr::app::controllers::github::get_state::get_state;
 use shipr::app::controllers::github::update_userid_github_app_installations::update_userid_github_app_installations;
 use shipr::app::controllers::project::add_new_project::add_new_project;
@@ -147,7 +149,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     HttpServer::new(move || {
         let cors = actix_cors::Cors::default()
-            .allowed_origin("https://spies-calgary-cds-venice.trycloudflare.com")
+            .allowed_origin("https://notifications-dining-manor-watched.trycloudflare.com")
             .allowed_origin("http://localhost:5173")
             .allow_any_method()
             .allow_any_header()
@@ -168,12 +170,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .route("/auth/github", web::get().to(github_auth_url))
             .route("/auth/github/callback", web::get().to(github_callback))
             .route("/webhook/github", web::post().to(github_event))
-            .route(
-                "/check-repo-name-availability",
-                web::post().to(check_repo_name_availability),
-            )
+            .route("/check-repo-name-availability", web::post().to(check_repo_name_availability))
             .route("/job-completed", web::post().to(job_completed_controller))
             .route("/kill-vm", web::post().to(kill_vm_controller))
+            .route("/api/webhooks/stripe", web::post().to(stripe_webhook_controller))
+            .route("/webhook/stripe", web::post().to(stripe_webhook_controller))
+            .route("/api/checkout", web::post().to(checkout_controller))
+            .route("/checkout", web::post().to(checkout_controller))
             .service(
                 web::scope("")
                     .wrap(from_fn(is_logged_in))
@@ -207,7 +210,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         "/get-billing-details",
                         web::get().to(get_billing_details_controller),
                     )
-                    .route("/add-credits", web::post().to(add_credits_controller)),
+                    .route("/add-credits", web::post().to(add_credits_controller))
+                    .route("/api/checkout", web::post().to(checkout_controller))
+                    .route("/checkout", web::post().to(checkout_controller)),
             )
     })
     .bind(("127.0.0.1", 3000))?

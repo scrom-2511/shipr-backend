@@ -8,3 +8,7 @@ shipr-deployment.pem
 CLAUDE.md
 FRONTEND_API_CONTEXT.md
 current.txt
+.agents
+.env
+*.md
+/*.md

@@ -1,5 +1,4 @@
-use sea_orm::DatabaseBackend;
-use sea_orm_migration::sea_query::extension::postgres::Type;
+use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
 use sea_orm_migration::{prelude::*, schema::*};
 
 #[derive(DeriveMigrationName)]
@@ -48,14 +47,13 @@ impl MigrationTrait for Migration {
 
         // 3. Create `project_type` Enum (Postgres)
         if manager.get_database_backend() == DatabaseBackend::Postgres {
-            let _ = manager
-                .create_type(
-                    Type::create()
-                        .as_enum(Alias::new("project_type"))
-                        .values(["html", "rust", "react", "node", "unknown"])
-                        .to_owned(),
-                )
-                .await;
+            manager
+                .get_connection()
+                .execute(Statement::from_string(
+                    DatabaseBackend::Postgres,
+                    "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'project_type') THEN CREATE TYPE project_type AS ENUM ('html', 'rust', 'react', 'node', 'unknown'); END IF; END $$;",
+                ))
+                .await?;
         }
 
         // 4. Create `projects` table
@@ -132,9 +130,13 @@ impl MigrationTrait for Migration {
             .drop_table(Table::drop().table(Projects::Table).to_owned())
             .await?;
         if manager.get_database_backend() == DatabaseBackend::Postgres {
-            let _ = manager
-                .drop_type(Type::drop().name(Alias::new("project_type")).to_owned())
-                .await;
+            manager
+                .get_connection()
+                .execute(Statement::from_string(
+                    DatabaseBackend::Postgres,
+                    "DROP TYPE IF EXISTS project_type;",
+                ))
+                .await?;
         }
         manager
             .drop_table(Table::drop().table(GithubRepos::Table).to_owned())
