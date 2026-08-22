@@ -56,7 +56,6 @@ pub async fn serve(
 
     // Spawn idle kill listener worker task
     {
-        let redis = redis.clone();
         let vm_pool = vm_pool.clone();
         let id_allocator = id_allocator.clone();
         let pool_data = web::Data::new(pool.clone());
@@ -65,10 +64,10 @@ pub async fn serve(
         tokio::spawn(async move {
             listen_idle_kill(
                 idle_kill_queue_data,
-                redis,
                 vm_pool,
                 id_allocator,
                 pool_data,
+                redis,
             )
             .await;
         });

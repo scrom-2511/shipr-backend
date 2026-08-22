@@ -1,14 +1,16 @@
 use futures::StreamExt;
 use lapin::{
-    Channel, Queue,
-    options::{BasicAckOptions, QueueDeclareOptions},
+    BasicProperties, Channel, Queue,
+    message::Delivery,
+    options::{
+        BasicAckOptions, BasicConsumeOptions, BasicPublishOptions, ExchangeDeclareOptions,
+        QueueBindOptions, QueueDeclareOptions,
+    },
     types::{AMQPValue, FieldTable, LongString, ShortString},
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    app_errors::AppError, core::controller::queue::lapin::Lapin,
-};
+use crate::{app_errors::AppError, core::controller::queue::lapin::Lapin};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct IdleKillReq {
@@ -37,6 +39,19 @@ impl IdleKillQueue {
             AMQPValue::LongString(LongString::from("quorum")),
         );
 
+        channel
+            .exchange_declare(
+                ShortString::from("idle_kill_exchange"),
+                lapin::ExchangeKind::Direct,
+                ExchangeDeclareOptions {
+                    durable: true,
+                    ..Default::default()
+                },
+                FieldTable::default(),
+            )
+            .await
+            .map_err(|e| AppError::LapinError(e.to_string()))?;
+
         let queue = channel
             .queue_declare(
                 ShortString::from("idle_kill_queue"),
@@ -49,52 +64,103 @@ impl IdleKillQueue {
             .await
             .map_err(|e| AppError::QueueError(e.to_string()))?;
 
+        channel
+            .queue_bind(
+                ShortString::from("idle_kill_queue"),
+                ShortString::from("idle_kill_exchange"),
+                ShortString::from("execute"),
+                QueueBindOptions::default(),
+                FieldTable::default(),
+            )
+            .await
+            .map_err(|e| AppError::LapinError(e.to_string()))?;
+
+        let mut args = FieldTable::default();
+
+        args.insert(
+            "x-dead-letter-exchange".into(),
+            AMQPValue::LongString("idle_kill_exchange".into()),
+        );
+
+        args.insert(
+            "x-dead-letter-routing-key".into(),
+            AMQPValue::LongString("execute".into()),
+        );
+
+        args.insert(
+            "x-queue-type".into(),
+            AMQPValue::LongString("quorum".into()),
+        );
+
+        channel
+            .queue_declare(
+                ShortString::from("idle_kill_delay_queue"),
+                QueueDeclareOptions {
+                    durable: true,
+                    ..Default::default()
+                },
+                args,
+            )
+            .await
+            .map_err(|e| AppError::LapinError(e.to_string()))?;
+
+        channel
+            .queue_bind(
+                ShortString::from("idle_kill_delay_queue"),
+                ShortString::from("idle_kill_exchange"),
+                ShortString::from("schedule"),
+                QueueBindOptions::default(),
+                FieldTable::default(),
+            )
+            .await
+            .map_err(|e| AppError::LapinError(e.to_string()))?;
+
         Ok(Self { channel, queue })
     }
 
     pub async fn add_to_queue(&self, idle_req: &IdleKillReq) -> Result<(), AppError> {
         self.channel
             .basic_publish(
-                ShortString::from(""),
-                ShortString::from("idle_kill_queue"),
-                Default::default(),
-                serde_json::to_string(idle_req).unwrap().as_bytes(),
-                Default::default(),
+                ShortString::from("idle_kill_exchange"),
+                ShortString::from("schedule"),
+                BasicPublishOptions::default(),
+                serde_json::to_vec(&idle_req)?.as_slice(),
+                BasicProperties::default().with_expiration("120000".into()),
             )
             .await
             .map_err(|e| AppError::LapinError(e.to_string()))?;
 
-        println!("Published idle kill job for project: {}", idle_req.project_id);
+        println!(
+            "Published idle kill job for project: {} at {} ",
+            idle_req.project_id,
+            chrono::Utc::now().timestamp()
+        );
 
         Ok(())
     }
 
-    pub async fn pop_from_queue(&self) -> Result<IdleKillReq, AppError> {
+    pub async fn pop_from_queue(&self) -> Result<Delivery, AppError> {
         let mut consumer = self
             .channel
             .basic_consume(
                 ShortString::from("idle_kill_queue"),
-                ShortString::from("idle_kill_queue"),
-                Default::default(),
-                Default::default(),
+                ShortString::from("idle_kill_consumer"),
+                BasicConsumeOptions::default(),
+                FieldTable::default(),
             )
             .await
             .map_err(|e| AppError::LapinError(e.to_string()))?;
 
-        while let Some(delivery) = consumer.next().await {
-            let delivery = delivery.map_err(|e| AppError::LapinError(e.to_string()))?;
+        match consumer.next().await {
+            Some(delivery) => {
+                let delivery = delivery.map_err(|e| AppError::LapinError(e.to_string()))?;
 
-            let data = serde_json::from_slice::<IdleKillReq>(&delivery.data)
-                .map_err(|e| AppError::LapinError(e.to_string()))?;
+                Ok(delivery)
+            }
 
-            delivery
-                .ack(BasicAckOptions::default())
-                .await
-                .map_err(|e| AppError::LapinError(e.to_string()))?;
-
-            return Ok(data);
+            None => Err(AppError::QueueError(
+                "Consumer stopped without receiving a message".to_string(),
+            )),
         }
-
-        Err(AppError::QueueError("No message received".to_string()))
     }
 }

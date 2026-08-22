@@ -1,13 +1,15 @@
-use std::time::Duration;
 use actix_web::web;
+use chrono::format::Numeric;
+use lapin::options::BasicAckOptions;
 use redis::AsyncCommands;
+use std::time::Duration;
 
 use crate::{
     app::db::DbPool,
     core::{
         app_types::JobType,
         controller::{
-            queue::idle_kill_queue::IdleKillQueue,
+            queue::idle_kill_queue::{IdleKillQueue, IdleKillReq},
             storage::redis::Redis,
             vm::{id_allocator::IdAllocator, vm_pool::VmPool},
         },
@@ -15,19 +17,19 @@ use crate::{
     },
 };
 
-const IDLE_TIMEOUT_SECS: i64 = 3600; // 1 hour idle timeout
+const IDLE_TIMEOUT_SECS: i64 = 120; // 2 minutes idle timeout for testing
 
 pub async fn listen_idle_kill(
     idle_kill_queue: web::Data<IdleKillQueue>,
-    redis: Redis,
     vm_pool: VmPool,
     id_allocator: IdAllocator,
     pool: web::Data<DbPool>,
+    redis: Redis,
 ) {
     println!("Started listen_idle_kill listener worker");
 
     loop {
-        let idle_req = match idle_kill_queue.pop_from_queue().await {
+        let delivery = match idle_kill_queue.pop_from_queue().await {
             Ok(v) => v,
             Err(e) => {
                 eprintln!("Idle kill queue error: {:?}", e);
@@ -36,72 +38,121 @@ pub async fn listen_idle_kill(
             }
         };
 
-        let project_id = idle_req.project_id;
-        let numeric_id = idle_req.numeric_id;
+        let idle_req = match serde_json::from_slice::<IdleKillReq>(&delivery.data) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("Failed to deserialize message: {:?}", e);
 
-        loop {
-            let mut redis_conn = redis.get_conn();
-            let last_req_key = format!("project:last_request_time:{}", project_id);
-            let start_time_key = format!("project:vm_start_time:{}", project_id);
+                delivery.ack(BasicAckOptions::default()).await.ok();
 
-            let now_ts = chrono::Utc::now().timestamp();
-            let last_req_time: Option<i64> = redis_conn.get(&last_req_key).await.ok().flatten();
+                continue;
+            }
+        };
 
-            let last_ts = last_req_time.unwrap_or(now_ts);
-            let elapsed_idle = now_ts - last_ts;
+        let mut redis_conn = redis.get_conn();
+        let last_activity = match redis_conn
+            .get::<String, i64>(format!("project:last_request_time:{}", idle_req.project_id))
+            .await
+        {
+            Ok(timestamp) => timestamp,
 
-            if elapsed_idle < IDLE_TIMEOUT_SECS {
-                // Requests came in, so delay execution by the remaining time!
-                let sleep_secs = (IDLE_TIMEOUT_SECS - elapsed_idle).max(1) as u64;
-                println!(
-                    "Project {} has recent activity (idle for {}s). Delaying kill job by {}s...",
-                    project_id, elapsed_idle, sleep_secs
-                );
-                tokio::time::sleep(Duration::from_secs(sleep_secs)).await;
-            } else {
-                // No request came for at least 1 hour! Time to kill VM & update active time in DB.
-                println!(
-                    "No requests received for project {} for 1 hour. Killing microVM and updating active time in DB.",
-                    project_id
+            Err(e) => {
+                eprintln!(
+                    "Failed to get last activity for {}: {:?}",
+                    idle_req.project_id, e
                 );
 
-                let start_time: Option<i64> = redis_conn.get(&start_time_key).await.ok().flatten();
-                let active_seconds = if let Some(boot_ts) = start_time {
-                    (now_ts - boot_ts).max(IDLE_TIMEOUT_SECS)
-                } else {
-                    IDLE_TIMEOUT_SECS
-                };
+                continue;
+            }
+        };
 
-                // 1. Update DB active time & status to 'stopped'
-                let _ = sqlx::query(
-                    r#"
+        let now = chrono::Utc::now().timestamp();
+
+        if now - last_activity + 20 >= IDLE_TIMEOUT_SECS {
+            kill_vm(&idle_req.project_id, &JobType::Run, &vm_pool, &id_allocator)
+                .await
+                .ok()
+                .unwrap();
+
+            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
+            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
+            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
+            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
+            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
+            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
+            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
+            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
+            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
+            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
+            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
+            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
+            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
+            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
+
+            let numeric_id = idle_req.numeric_id;
+
+            let start_time = redis
+                .get_conn()
+                .get::<String, i64>(format!("project:vm_start_time:{}", idle_req.project_id))
+                .await
+                .unwrap();
+
+            let total_active_time = now - start_time;
+
+            println!(
+                "Total active time for project: {} at {}",
+                idle_req.project_id, total_active_time
+            );
+
+            let _ = sqlx::query(
+                r#"
                     UPDATE projects
                     SET active_seconds = COALESCE(active_seconds, 0) + $1,
                         status = 'stopped',
                         updated_at = NOW()
                     WHERE id = $2
                     "#,
-                )
-                .bind(active_seconds)
-                .bind(numeric_id)
-                .execute(pool.get_ref())
-                .await;
+            )
+            .bind(total_active_time)
+            .bind(numeric_id)
+            .execute(pool.get_ref())
+            .await
+            .unwrap();
 
-                // 2. Kill the Firecracker microVM
-                if let Err(e) = kill_vm(&project_id, &JobType::Run, &vm_pool, &id_allocator).await {
-                    eprintln!("Failed to kill VM for project {}: {:?}", project_id, e);
-                }
+            let _: () = redis_conn
+                .del(format!("project:vm_start_time:{}", idle_req.project_id))
+                .await
+                .unwrap();
 
-                // 3. Clean up Redis keys
-                let _: () = redis_conn.del(&last_req_key).await.unwrap_or(());
-                let _: () = redis_conn.del(&start_time_key).await.unwrap_or(());
+            let _: () = redis_conn
+                .del(format!("project:last_request_time:{}", idle_req.project_id))
+                .await
+                .unwrap();
+        } else {
+            println!(
+                "Project {} is still active, pushing back to queue at {}",
+                idle_req.project_id, now
+            );
+            println!(
+                "Project {} is still active, pushing back to queue at {}",
+                idle_req.project_id, now
+            );
+            println!(
+                "Project {} is still active, pushing back to queue at {}",
+                idle_req.project_id, now
+            );
 
-                println!(
-                    "Successfully killed idle VM for project {} and added {}s to active_seconds in DB.",
-                    project_id, active_seconds
-                );
-                break;
-            }
+            let _: () = idle_kill_queue
+                .add_to_queue(&IdleKillReq {
+                    project_id: idle_req.project_id.clone(),
+                    numeric_id: idle_req.numeric_id,
+                })
+                .await
+                .unwrap();
+        }
+
+        if let Err(e) = delivery.ack(BasicAckOptions::default()).await {
+            eprintln!("Failed to ACK message: {:?}", e);
         }
     }
 }

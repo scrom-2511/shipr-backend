@@ -64,7 +64,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let id_allocator = IdAllocator::new(redis.clone());
     let vm_pool = VmPool::new(redis.clone(), id_allocator.clone());
     let s3_service = S3Service::new().await;
-    let heartbeat_store = HeartbeatStore::new(redis);
+    let heartbeat_store = HeartbeatStore::new(redis.clone());
 
     let job_dispatcher = JobDispatcher::new(
         vm_pool.clone(),
@@ -130,16 +130,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let id_allocator = id_allocator.clone();
         let vm_pool = vm_pool.clone();
         let idle_kill_queue = idle_kill_queue.clone();
-        let redis = redis.clone();
         let pool_data = web::Data::new(pool.clone());
 
         tokio::spawn(async move {
             listen_idle_kill(
                 idle_kill_queue,
-                redis,
                 vm_pool,
                 id_allocator,
                 pool_data,
+                redis.clone(),
             )
             .await;
         });
@@ -147,7 +146,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     HttpServer::new(move || {
         let cors = actix_cors::Cors::default()
-            .allowed_origin("https://presented-tank-forwarding-scenes.trycloudflare.com")
+            .allowed_origin("https://spies-calgary-cds-venice.trycloudflare.com")
             .allowed_origin("http://localhost:5173")
             .allow_any_method()
             .allow_any_header()
@@ -207,10 +206,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         "/get-billing-details",
                         web::get().to(get_billing_details_controller),
                     )
-                    .route(
-                        "/add-credits",
-                        web::post().to(add_credits_controller),
-                    ),
+                    .route("/add-credits", web::post().to(add_credits_controller)),
             )
     })
     .bind(("127.0.0.1", 3000))?

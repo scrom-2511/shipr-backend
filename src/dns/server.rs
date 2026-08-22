@@ -26,7 +26,7 @@ impl ShiprDNS {
         loop {
             let (size, peer) = socket.recv_from(&mut buf).await?;
 
-            println!("Received {} bytes from {}", size, peer);
+            // println!("Received {} bytes from {}", size, peer);
 
             let response = self.handle_packet(&buf[..size]).await?;
 
@@ -44,10 +44,10 @@ impl ShiprDNS {
 
         let domain = query.name.to_string();
 
-        println!("Received request for domain {}", domain);
+        // println!("Received request for domain {}", domain);
 
-        if domain.contains("shipr") {
-            println!("Received request for shipr.com domain");
+        if domain.contains("shipr.com.") {
+            // println!("Received request for shipr.com domain");
             let project_id = domain.replace(".shipr.com.", "");
 
             let _vm = self
