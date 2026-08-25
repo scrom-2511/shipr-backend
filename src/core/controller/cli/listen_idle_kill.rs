@@ -3,6 +3,7 @@ use lapin::options::BasicAckOptions;
 use redis::AsyncCommands;
 use std::time::Duration;
 
+use crate::app::models::{projects, users};
 use crate::{
     app::db::DbPool,
     core::{
@@ -15,6 +16,7 @@ use crate::{
         infra::kill_vm::kill_vm,
     },
 };
+use sea_orm::{ActiveModelTrait, EntityTrait, Set};
 
 const IDLE_TIMEOUT_SECS: i64 = 120; // 2 minutes idle timeout for testing
 
@@ -74,19 +76,6 @@ pub async fn listen_idle_kill(
                 .unwrap();
 
             println!("Killed vm for project: {} at {}", idle_req.project_id, now);
-            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
-            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
-            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
-            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
-            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
-            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
-            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
-            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
-            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
-            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
-            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
-            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
-            println!("Killed vm for project: {} at {}", idle_req.project_id, now);
 
             let project_id_int = idle_req.project_id_int;
 
@@ -103,19 +92,29 @@ pub async fn listen_idle_kill(
                 idle_req.project_id, total_active_time
             );
 
-            use crate::app::models::projects;
-            use sea_orm::{ActiveModelTrait, EntityTrait, Set};
+            let mut user_id = -1;
 
             if let Ok(Some(project)) = projects::Entity::find_by_id(project_id_int)
                 .one(pool.get_ref())
                 .await
             {
+                user_id = project.user_id;
                 let new_active_seconds = project.active_seconds + total_active_time;
                 let mut active_project: projects::ActiveModel = project.into();
                 active_project.active_seconds = Set(new_active_seconds);
                 active_project.status = Set(crate::app::models::ProjectStatus::Stopped);
                 active_project.updated_at = Set(Some(chrono::Utc::now().naive_utc()));
                 let _ = active_project.update(pool.get_ref()).await;
+            }
+
+            let credits_balance_to_subtract = (total_active_time as f64 * 0.00000556) as i64;
+
+            if let Ok(Some(user)) = users::Entity::find_by_id(user_id).one(pool.get_ref()).await {
+                let mut active_user: users::ActiveModel = user.clone().into();
+
+                active_user.credit_balance = Set(user.credit_balance - credits_balance_to_subtract);
+
+                let _ = active_user.update(pool.get_ref()).await;
             }
 
             let _: () = redis_conn
