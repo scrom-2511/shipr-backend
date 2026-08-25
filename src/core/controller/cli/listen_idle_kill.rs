@@ -25,7 +25,7 @@ pub async fn listen_idle_kill(
     vm_pool: VmPool,
     id_allocator: IdAllocator,
     pool: web::Data<DbPool>,
-    redis: Redis,
+    redis: web::Data<Redis>,
 ) {
     println!("Started listen_idle_kill listener worker");
 

@@ -116,7 +116,14 @@ pub async fn listen(
         let pool_data = web::Data::new(pool.clone());
 
         tokio::spawn(async move {
-            listen_idle_kill(idle_kill_queue, vm_pool, id_allocator, pool_data, redis).await;
+            listen_idle_kill(
+                idle_kill_queue,
+                vm_pool,
+                id_allocator,
+                pool_data,
+                web::Data::new(redis),
+            )
+            .await;
         });
     }
 

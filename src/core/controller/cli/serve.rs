@@ -62,7 +62,7 @@ pub async fn serve(
         let id_allocator = id_allocator.clone();
         let pool_data = web::Data::new(pool.clone());
         let idle_kill_queue_data = idle_kill_queue_data.clone();
-
+        let redis = web::Data::new(redis.clone());
         tokio::spawn(async move {
             listen_idle_kill(
                 idle_kill_queue_data,

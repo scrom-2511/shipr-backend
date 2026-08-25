@@ -201,7 +201,7 @@ pub mod billing {
         pub id: i32,
         pub user_id: i32,
         pub payment_id: String,
-        pub amount: f64,
+        pub amount: i64,
         pub currency: String,
         pub created_at: Option<DateTime>,
         pub updated_at: Option<DateTime>,

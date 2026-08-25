@@ -157,16 +157,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let vm_pool = vm_pool.clone();
         let idle_kill_queue = idle_kill_queue.clone();
         let pool_data = web::Data::new(pool.clone());
-
+        let redis = web::Data::new(redis.clone());
         tokio::spawn(async move {
-            listen_idle_kill(
-                idle_kill_queue,
-                vm_pool,
-                id_allocator,
-                pool_data,
-                redis.clone(),
-            )
-            .await;
+            listen_idle_kill(idle_kill_queue, vm_pool, id_allocator, pool_data, redis).await;
         });
     }
 
@@ -186,6 +179,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .app_data(idle_kill_queue.clone())
             .app_data(web::Data::new(id_allocator.clone()))
             .app_data(web::Data::new(vm_pool.clone()))
+            .app_data(web::Data::new(redis.clone()))
             .wrap(cors)
             .app_data(web::Data::new(pool.clone()))
             .route("/signup", web::post().to(signup_controller))

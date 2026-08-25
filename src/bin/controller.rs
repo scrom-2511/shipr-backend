@@ -1,5 +1,5 @@
 use shipr::core::controller::{
-    cli::cli::cli,
+    //cli::cli::cli,
     storage::{redis::Redis, s3::S3Service},
     vm::{heartbeat_store::HeartbeatStore, id_allocator::IdAllocator, vm_pool::VmPool},
 };
@@ -23,15 +23,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let s3_service = S3Service::new().await;
     let heartbeat_store = HeartbeatStore::new(redis.clone());
 
-    cli(
-        vm_pool,
-        id_allocator,
-        s3_service,
-        heartbeat_store,
-        pool,
-        redis,
-    )
-    .await?;
+    // cli(
+    //     vm_pool,
+    //     id_allocator,
+    //     s3_service,
+    //     heartbeat_store,
+    //     pool,
+    //     redis,
+    // )
+    // .await?;
 
     Ok(())
 }

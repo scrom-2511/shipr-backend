@@ -10,28 +10,11 @@ use dodopayments::models::{
 };
 use sea_orm::EntityTrait;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-
-#[derive(Debug, Deserialize)]
-pub struct DodoCheckoutItemInput {
-    pub name: Option<String>,
-    pub product_id: Option<String>,
-    pub amount: Option<f64>,
-    pub quantity: Option<u64>,
-}
 
 #[derive(Debug, Deserialize)]
 pub struct DodoCheckoutRequest {
     pub amount: Option<f64>,
-    pub currency: Option<String>,
-    pub product_id: Option<String>,
-    pub items: Option<Vec<DodoCheckoutItemInput>>,
-    pub customer_email: Option<String>,
     pub return_url: Option<String>,
-    pub redirect_url: Option<String>,
-    pub metadata: Option<HashMap<String, String>>,
-    pub payment_method_type: Option<String>,
-    pub cardholder_name: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -74,11 +57,10 @@ pub async fn dodo_checkout_controller(
         std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:5173".to_string());
 
     let return_target = body
-        .redirect_url
+        .return_url
         .as_ref()
-        .or(body.return_url.as_ref())
         .cloned()
-        .unwrap_or_else(|| format!("{}/dashboard/billing?status=success", frontend_url));
+        .unwrap_or_else(|| format!("{}/checkout/success", frontend_url));
 
     let product_id = std::env::var("DODO_PRODUCT_ID").unwrap();
     println!("product_id: {:?}", product_id);
@@ -89,6 +71,7 @@ pub async fn dodo_checkout_controller(
     let mut metadata = HashMap::new();
 
     metadata.insert("user_id".to_string(), json!(user_id));
+    metadata.insert("amount".to_string(), json!(amount_cents));
 
     // 3. Create checkout session using Dodo Payments SDK directly
     let result = state

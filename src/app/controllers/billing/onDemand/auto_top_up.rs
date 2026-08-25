@@ -35,6 +35,7 @@ pub async fn auto_top_up(
 
     metadata.insert("user_id".to_string(), json!(user_id));
     metadata.insert("payment_type".to_string(), json!("auto_top_up"));
+    metadata.insert("amount".to_string(), json!(5000));
 
     let result = state
         .client

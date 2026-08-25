@@ -23,7 +23,7 @@ pub async fn dodo_webhook_controller(
     body: web::Bytes,
     req: HttpRequest,
     pool: web::Data<DbPool>,
-    redis: Redis,
+    redis: web::Data<Redis>,
 ) -> Result<HttpResponse, AppError> {
     let payload: Value = serde_json::from_slice(&body)
         .map_err(|_| AppError::BadRequest("Invalid JSON payload".to_string()))?;
@@ -171,7 +171,7 @@ fn verify_webhook(req: &HttpRequest, body: &[u8]) -> Result<bool, AppError> {
 async fn process_payment_succeeded(
     db: &DatabaseConnection,
     data: Payment,
-    redis: Redis,
+    redis: web::Data<Redis>,
 ) -> Result<(), AppError> {
     if data.total_amount == 0 {
         println!("Mandate-only payment, not adding credits");
@@ -188,6 +188,16 @@ async fn process_payment_succeeded(
         .ok_or_else(|| {
             AppError::BadRequest("Missing or invalid user_id in metadata".to_string())
         })?;
+
+    let amount = data
+        .metadata
+        .get("amount")
+        .and_then(|v| {
+            v.as_i64()
+                .map(|n| n as i64)
+                .or_else(|| v.as_str().and_then(|s| s.parse::<i64>().ok()))
+        })
+        .ok_or_else(|| AppError::BadRequest("Missing or invalid amount in metadata".to_string()))?;
 
     println!("user_id : {}", user_id);
 
@@ -210,7 +220,7 @@ async fn process_payment_succeeded(
 
     let add_txn = billing::ActiveModel {
         user_id: Set(user_id),
-        amount: Set(data.total_amount as f64),
+        amount: Set(amount),
         currency: Set(currency),
         payment_id: Set(data.payment_id),
         ..Default::default()
@@ -231,7 +241,7 @@ async fn process_payment_succeeded(
         .map_err(|e| AppError::Database(e.to_string()))?
         .ok_or_else(|| AppError::BadRequest("User not found".to_string()))?;
 
-    let new_balance = user.credit_balance + 2500;
+    let new_balance = user.credit_balance + amount;
 
     let mut active_user: users::ActiveModel = user.into();
 
