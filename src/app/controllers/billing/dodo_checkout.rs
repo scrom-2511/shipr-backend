@@ -80,7 +80,7 @@ pub async fn dodo_checkout_controller(
         .create()
         .body(CheckoutSessionsCreateParams {
             product_cart: Some(vec![ProductItemReq {
-                product_id,
+                product_id: product_id.clone(),
                 quantity: 1,
                 amount: Some(amount_cents),
                 addons: None,
@@ -98,6 +98,18 @@ pub async fn dodo_checkout_controller(
         })
         .await
         .map_err(|e| AppError::DodoError(e.to_string()))?;
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&ProductItemReq {
+            product_id: product_id,
+            quantity: 1,
+            amount: Some(amount_cents),
+            addons: None,
+            credit_entitlements: None,
+        })
+        .unwrap()
+    );
 
     println!("hi i am here after session creation");
 

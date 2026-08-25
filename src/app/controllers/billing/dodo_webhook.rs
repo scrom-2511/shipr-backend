@@ -32,7 +32,7 @@ pub async fn dodo_webhook_controller(
     let data = payload.get("data");
 
     println!("event_type : {}", event_type);
-    println!("FULL WEBHOOK: {}", payload);
+    // println!("FULL WEBHOOK: {}", payload);
     // println!("data : {}", data);
 
     match event_type {
@@ -41,7 +41,9 @@ pub async fn dodo_webhook_controller(
                 let data = serde_json::from_value::<Payment>(data_obj.to_owned()).unwrap();
 
                 let existing_txn = billing::Entity::find()
-                    .filter(billing::Column::PaymentId.eq(data.payment_id.clone()))
+                    .filter(billing::Column::PaymentId.eq(data.payment_id.clone()).or(
+                        billing::Column::CheckoutSessionId.eq(data.checkout_session_id.clone()),
+                    ))
                     .one(pool.as_ref())
                     .await
                     .map_err(|e| AppError::Database(e.to_string()))?;
@@ -223,6 +225,7 @@ async fn process_payment_succeeded(
         amount: Set(amount),
         currency: Set(currency),
         payment_id: Set(data.payment_id),
+        checkout_session_id: Set(data.checkout_session_id.unwrap()),
         ..Default::default()
     };
 

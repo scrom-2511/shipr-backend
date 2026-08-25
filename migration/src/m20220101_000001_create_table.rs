@@ -20,7 +20,7 @@ impl MigrationTrait for Migration {
                     .col(string(Users::Username).not_null())
                     .col(string(Users::Email).unique_key().not_null())
                     .col(string(Users::Password).not_null())
-                    .col(big_integer(Users::CreditBalance).not_null().default(5000))
+                    .col(big_integer(Users::CreditBalance).not_null().default(500))
                     .col(string(Users::DodoCustomerId).unique_key().null())
                     .col(string(Users::DodoSubscriptionId).unique_key().null())
                     .col(boolean(Users::AutoTopupEnabled).not_null().default(false))
@@ -127,7 +127,8 @@ impl MigrationTrait for Migration {
                     .col(pk_auto(Billing::Id))
                     .col(integer(Billing::UserId).not_null())
                     .col(string(Billing::PaymentId).unique_key().not_null())
-                    .col(double(Billing::Amount).not_null())
+                    .col(string(Billing::CheckoutSessionId).unique_key().not_null())
+                    .col(big_integer(Billing::Amount).not_null())
                     .col(string(Billing::Currency).not_null())
                     .col(timestamp(Billing::CreatedAt).default(Expr::current_timestamp()))
                     .col(timestamp(Billing::UpdatedAt).default(Expr::current_timestamp()))
@@ -246,6 +247,7 @@ enum Billing {
     UserId,
     PaymentId,
     Amount,
+    CheckoutSessionId,
     Currency,
     CreatedAt,
     UpdatedAt,
