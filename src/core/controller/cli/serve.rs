@@ -2,7 +2,7 @@ use actix_web::{App, HttpRequest, HttpResponse, HttpServer, web};
 use futures::lock::Mutex;
 
 use crate::{
-    app::db::DbPool,
+    app::{db::DbPool, state::AppState},
     app_errors::AppError,
     core::controller::{
         api::vm_request_proxy::VmRequestProxy,
@@ -32,6 +32,7 @@ pub async fn serve(
     heartbeat_store: HeartbeatStore,
     pool: DbPool,
     redis: Redis,
+    state: web::Data<AppState>,
 ) -> Result<(), AppError> {
     let lapin_conn = Lapin::new().await?;
     let idle_kill_queue = IdleKillQueue::new(&lapin_conn).await?;
@@ -52,6 +53,7 @@ pub async fn serve(
         pool.clone(),
         redis.clone(),
         idle_kill_queue,
+        state,
     )?));
 
     // Spawn idle kill listener worker task

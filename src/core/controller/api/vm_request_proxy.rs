@@ -1,5 +1,7 @@
+use crate::app::controllers::billing::onDemand::auto_top_up::{AutoTopUpRequest, auto_top_up};
 use crate::app::db::DbPool;
-use crate::app::models::{project_traffic, projects};
+use crate::app::models::{project_traffic, projects, users};
+use crate::app::state::AppState;
 use crate::app_errors::AppError;
 use crate::core::app_types::JobType;
 use crate::core::controller::dispatcher::job_dispatcher::JobDispatcher;
@@ -12,7 +14,7 @@ use actix_web::{App, HttpRequest, HttpResponse, web};
 use redis::AsyncCommands;
 use reqwest::header::{HeaderName, HeaderValue};
 use reqwest::{Client, Method};
-use sea_orm::{ActiveModelTrait, EntityTrait, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use std::str::FromStr;
 use std::time::Duration;
 use tokio::net::TcpStream;
@@ -27,6 +29,7 @@ pub struct VmRequestProxy {
     pool: DbPool,
     redis: Redis,
     idle_kill_queue: IdleKillQueue,
+    state: web::Data<AppState>,
 }
 
 impl VmRequestProxy {
@@ -37,6 +40,7 @@ impl VmRequestProxy {
         pool: DbPool,
         redis: Redis,
         idle_kill_queue: IdleKillQueue,
+        state: web::Data<AppState>,
     ) -> Result<Self, AppError> {
         let client = Client::new();
 
@@ -48,6 +52,7 @@ impl VmRequestProxy {
             pool,
             redis,
             idle_kill_queue,
+            state,
         })
     }
 
@@ -80,7 +85,6 @@ impl VmRequestProxy {
             return Ok((project_id_str.to_string(), project_id_int, uri));
         }
 
-        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
         let project = crate::app::models::projects::Entity::find()
             .filter(crate::app::models::projects::Column::ProjectId.eq(&name))
             .one(&self.pool)
@@ -257,6 +261,66 @@ impl VmRequestProxy {
         }
 
         let _: () = redis_conn.set(&last_activity_key, now).await?;
+
+        Ok(())
+    }
+
+    async fn check_and_add_credits(
+        &self,
+        pool: &DbPool,
+        project_id_int: i32,
+    ) -> Result<(), AppError> {
+        let mut conn = self.redis.get_conn();
+
+        let project_key = project_id_int.to_string();
+
+        let user_id: i32 = match conn.get(&project_key).await {
+            Ok(user_id) => user_id,
+
+            Err(_) => {
+                let project = projects::Entity::find_by_id(project_id_int)
+                    .one(pool)
+                    .await
+                    .map_err(|e| AppError::Database(e.to_string()))?
+                    .ok_or_else(|| AppError::Database("Project not found".to_string()))?;
+
+                let _: () = conn
+                    .set_ex(&project_key, project.user_id, 60 * 60 * 24)
+                    .await
+                    .map_err(|e| AppError::Redis(e))?;
+
+                project.user_id
+            }
+        };
+
+        let credits_key = format!("credits:{}", user_id);
+        let auto_topup_key = format!("auto_topup:{}", user_id);
+
+        let credits: Option<i64> = conn.get(&credits_key).await.ok();
+
+        let auto_topup_enabled: Option<bool> = conn.get(&auto_topup_key).await.ok();
+
+        let (credits, auto_topup_enabled) =
+            if let (Some(credits), Some(auto_topup_enabled)) = (credits, auto_topup_enabled) {
+                (credits, auto_topup_enabled)
+            } else {
+                let user = users::Entity::find_by_id(user_id)
+                    .one(pool)
+                    .await
+                    .map_err(|e| AppError::Database(e.to_string()))?
+                    .ok_or_else(|| AppError::Database("User not found".to_string()))?;
+
+                let _: () = conn
+                    .set_ex(&auto_topup_key, user.auto_topup_enabled, 60 * 60 * 24)
+                    .await
+                    .map_err(|e| AppError::Redis(e))?;
+
+                (user.credit_balance, user.auto_topup_enabled)
+            };
+
+        if credits < 10 && auto_topup_enabled {
+            auto_top_up(self.state.clone(), self.pool.clone(), user_id).await?;
+        }
 
         Ok(())
     }

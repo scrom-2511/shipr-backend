@@ -21,11 +21,11 @@ pub struct AutoTopUpRequest {
 
 pub async fn auto_top_up(
     state: web::Data<AppState>,
-    pool: web::Data<DbPool>,
-    req: web::Json<AutoTopUpRequest>,
+    pool: DbPool,
+    user_id: i32,
 ) -> Result<(), AppError> {
-    let user = users::Entity::find_by_id(req.user_id)
-        .one(pool.as_ref())
+    let user = users::Entity::find_by_id(user_id)
+        .one(&pool)
         .await?
         .ok_or(AppError::UserNotFound)?;
 
@@ -33,7 +33,7 @@ pub async fn auto_top_up(
 
     let mut metadata = HashMap::new();
 
-    metadata.insert("user_id".to_string(), json!(req.user_id));
+    metadata.insert("user_id".to_string(), json!(user_id));
     metadata.insert("payment_type".to_string(), json!("auto_top_up"));
 
     let result = state
