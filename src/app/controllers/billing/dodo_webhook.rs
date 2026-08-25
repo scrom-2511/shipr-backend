@@ -2,12 +2,14 @@ use crate::app::db::DbPool;
 use crate::app::state::AppState;
 use crate::app::{models::billing, models::users};
 use crate::app_errors::AppError;
+use crate::core::controller::storage::redis::Redis;
 
 use actix_web::{HttpRequest, HttpResponse, web};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use dodopayments::models::{Currency, Payment};
 use dodopayments::{Client, models::PaymentSucceededWebhookEvent};
 use hmac::{Hmac, KeyInit, Mac};
+use redis::AsyncCommands;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set,
     TransactionTrait,
@@ -21,6 +23,7 @@ pub async fn dodo_webhook_controller(
     body: web::Bytes,
     req: HttpRequest,
     pool: web::Data<DbPool>,
+    redis: Redis,
 ) -> Result<HttpResponse, AppError> {
     let payload: Value = serde_json::from_slice(&body)
         .map_err(|_| AppError::BadRequest("Invalid JSON payload".to_string()))?;
@@ -52,7 +55,7 @@ pub async fn dodo_webhook_controller(
                 if !is_valid {
                     return Ok(HttpResponse::Unauthorized().finish());
                 }
-                process_payment_succeeded(&state.db, data).await?;
+                process_payment_succeeded(&state.db, data, redis).await?;
             }
         }
         "subscription.active" => {
@@ -164,7 +167,11 @@ fn verify_webhook(req: &HttpRequest, body: &[u8]) -> Result<bool, AppError> {
     Ok(result)
 }
 
-async fn process_payment_succeeded(db: &DatabaseConnection, data: Payment) -> Result<(), AppError> {
+async fn process_payment_succeeded(
+    db: &DatabaseConnection,
+    data: Payment,
+    redis: Redis,
+) -> Result<(), AppError> {
     if data.total_amount == 0 {
         println!("Mandate-only payment, not adding credits");
         return Ok(());
@@ -217,32 +224,36 @@ async fn process_payment_succeeded(db: &DatabaseConnection, data: Payment) -> Re
 
     println!("added billing txn");
 
-    if let Some(user) = users::Entity::find_by_id(user_id)
+    let user = users::Entity::find_by_id(user_id)
         .one(&txn)
         .await
         .map_err(|e| AppError::Database(e.to_string()))?
-    {
-        let new_balance = user.credit_balance + 2500;
-        let mut active_user: users::ActiveModel = user.into();
-        active_user.credit_balance = Set(new_balance);
+        .ok_or_else(|| AppError::BadRequest("User not found".to_string()))?;
 
-        let dodo_customer_id = data.customer.customer_id;
+    let new_balance = user.credit_balance + 2500;
 
-        active_user.dodo_customer_id = Set(Some(dodo_customer_id));
+    let mut active_user: users::ActiveModel = user.into();
 
-        active_user
-            .update(&txn)
-            .await
-            .map_err(|e| AppError::Database(e.to_string()))?;
-    }
+    active_user.credit_balance = Set(new_balance);
 
-    println!("updated user balance");
+    let dodo_customer_id = data.customer.customer_id;
+    active_user.dodo_customer_id = Set(Some(dodo_customer_id));
+
+    active_user
+        .update(&txn)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
 
     txn.commit()
         .await
         .map_err(|e| AppError::Database(e.to_string()))?;
 
     println!("committed transaction");
+
+    let mut conn = redis.get_conn();
+    let _: () = conn
+        .set(format!("credits:{}", user_id), new_balance)
+        .await?;
 
     Ok(())
 }
