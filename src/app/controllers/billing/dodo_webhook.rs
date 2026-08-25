@@ -81,6 +81,7 @@ pub async fn dodo_webhook_controller(
                 let mut active_user: users::ActiveModel = user.into();
 
                 active_user.dodo_subscription_id = Set(Some(subscription_id.to_string()));
+                active_user.auto_topup_enabled = Set(true);
 
                 active_user.update(pool.as_ref()).await?;
 
