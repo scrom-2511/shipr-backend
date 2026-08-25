@@ -103,14 +103,17 @@ pub async fn listen_idle_kill(
                 idle_req.project_id, total_active_time
             );
 
-            use sea_orm::{ActiveModelTrait, EntityTrait, Set};
             use crate::app::models::projects;
+            use sea_orm::{ActiveModelTrait, EntityTrait, Set};
 
-            if let Ok(Some(project)) = projects::Entity::find_by_id(numeric_id).one(pool.get_ref()).await {
+            if let Ok(Some(project)) = projects::Entity::find_by_id(numeric_id)
+                .one(pool.get_ref())
+                .await
+            {
                 let new_active_seconds = project.active_seconds + total_active_time;
                 let mut active_project: projects::ActiveModel = project.into();
                 active_project.active_seconds = Set(new_active_seconds);
-                active_project.status = Set("stopped".to_string());
+                active_project.status = Set(crate::app::models::ProjectStatus::Stopped);
                 active_project.updated_at = Set(Some(chrono::Utc::now().naive_utc()));
                 let _ = active_project.update(pool.get_ref()).await;
             }

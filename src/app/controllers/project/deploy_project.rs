@@ -1,6 +1,6 @@
 use actix_web::{
-    web::{self},
     HttpMessage, HttpRequest, HttpResponse,
+    web::{self},
 };
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
@@ -36,10 +36,15 @@ pub async fn deploy_project_controller(
     let installation_repo =
         github_repo.ok_or_else(|| AppError::Database("Installation id not found".to_string()))?;
 
-    if !installation_repo
+    let installation_id = body.installation_id as i32;
+
+    let contains_installation = installation_repo
         .installation_ids
-        .contains(&(body.installation_id as i32))
-    {
+        .as_ref()
+        .map(|ids| ids.contains(&installation_id))
+        .unwrap_or(false);
+
+    if !contains_installation {
         return Err(AppError::Database("Installation id not found".to_string()));
     }
 
@@ -47,23 +52,25 @@ pub async fn deploy_project_controller(
 
     println!("Project added to queue successfully");
 
-    let envs = vec![{
+    let envs = {
         let json = serde_json::to_string(&body.envs).unwrap();
-        crate::shared::crypto::Crypto::encrypt(&json)
-    }];
+        let encrypted = crate::shared::crypto::Crypto::encrypt(&json);
+
+        serde_json::Value::String(encrypted)
+    };
 
     let now = chrono::Utc::now().naive_utc();
 
     let new_project = projects::ActiveModel {
         project_id: Set(body.project_id.clone()),
-        status: Set("deploying".to_string()),
+        status: Set(crate::app::models::ProjectStatus::Deploying),
         root_dir: Set(body.root_dir.clone()),
         full_name: Set(body.full_name.clone()),
         user_id: Set(user_id),
         last_deployment_time: Set(Some(now)),
         created_at: Set(Some(now)),
         updated_at: Set(Some(now)),
-        branch: Set(Some(body.branch.clone())),
+        branch: Set(body.branch),
         envs: Set(Some(envs)),
         ..Default::default()
     };

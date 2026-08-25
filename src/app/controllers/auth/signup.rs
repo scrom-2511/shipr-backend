@@ -1,7 +1,9 @@
 use crate::app::models::users;
+use crate::app::state::AppState;
 use crate::app::{controllers::ApiResponse, db::DbPool};
 use crate::app_errors::AppError;
 use actix_web::{HttpResponse, web};
+use dodopayments::models::CustomersCreateParams;
 use sea_orm::{ActiveModelTrait, Set};
 use serde::{Deserialize, Serialize};
 use validator::Validate;
@@ -24,6 +26,7 @@ pub struct SignupResponse {
 }
 
 pub async fn signup_controller(
+    state: web::Data<AppState>,
     pool: web::Data<DbPool>,
     body: web::Json<SignupRequest>,
 ) -> Result<HttpResponse, AppError> {
@@ -38,29 +41,31 @@ pub async fn signup_controller(
     let hashed_password =
         bcrypt::hash(&signup.password, 10).map_err(|_| AppError::InternalServerError)?;
 
-    let new_user = users::ActiveModel {
+    let mut new_user = users::ActiveModel {
         username: Set(signup.username.clone()),
         email: Set(signup.email.clone()),
         password: Set(hashed_password),
         ..Default::default()
     };
 
-    match new_user.insert(pool.as_ref()).await {
-        Ok(_) => Ok(HttpResponse::Created().json(ApiResponse::<()> {
-            success: true,
-            message: "User created successfully".to_string(),
-            data: None,
-        })),
-        Err(e) => {
-            let err_str = e.to_string();
-            if err_str.contains("23505")
-                || err_str.contains("users_email_key")
-                || err_str.contains("UNIQUE constraint")
-            {
-                Err(AppError::UserAlreadyExists(signup.email))
-            } else {
-                Err(AppError::Database(err_str))
-            }
-        }
-    }
+    let customer = state
+        .client
+        .customers()
+        .create()
+        .body(CustomersCreateParams {
+            email: Some(signup.email),
+            name: Some(signup.username),
+            ..Default::default()
+        })
+        .await
+        .map_err(|e| AppError::DodoError(e.to_string()))?;
+
+    new_user.dodo_customer_id = Set(Some(customer.customer_id));
+    new_user.insert(pool.as_ref()).await?;
+
+    Ok(HttpResponse::Created().json(ApiResponse::<()> {
+        success: true,
+        message: "User created successfully".to_string(),
+        data: None,
+    }))
 }

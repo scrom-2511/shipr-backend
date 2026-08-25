@@ -1,0 +1,95 @@
+nohup: ignoring input
+2026-08-23T09:38:32Z INF Thank you for trying Cloudflare Tunnel. Doing so, without a Cloudflare account, is a quick way to experiment and try it out. However, be aware that these account-less Tunnels have no uptime guarantee, are subject to the Cloudflare Online Services Terms of Use (https://www.cloudflare.com/website-terms/), and Cloudflare reserves the right to investigate your use of Tunnels for violations of such terms. If you intend to use Tunnels in production you should use a pre-created named tunnel by following: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps
+2026-08-23T09:38:32Z INF Requesting new quick Tunnel on trycloudflare.com...
+2026-08-23T09:38:38Z INF +--------------------------------------------------------------------------------------------+
+2026-08-23T09:38:38Z INF |  Your quick Tunnel has been created! Visit it at (it may take some time to be reachable):  |
+2026-08-23T09:38:38Z INF |  https://tiles-gaming-losses-wma.trycloudflare.com                                         |
+2026-08-23T09:38:38Z INF +--------------------------------------------------------------------------------------------+
+2026-08-23T09:38:38Z INF Cannot determine default configuration path. No file [config.yml config.yaml] in [~/.cloudflared ~/.cloudflare-warp ~/cloudflare-warp /etc/cloudflared /usr/local/etc/cloudflared]
+2026-08-23T09:38:38Z INF Version 2026.5.0-3-g0c901487 (Checksum 920fa169be2992cc1b1b691e4d1f89ade6787f240288c724dc25d0d4878a65d9)
+2026-08-23T09:38:38Z INF GOOS: linux, GOVersion: go1.26.2, GoArch: amd64
+2026-08-23T09:38:38Z INF Settings: map[ha-connections:1 protocol:quic url:http://localhost:5173]
+2026-08-23T09:38:38Z INF cloudflared will not automatically update if installed by a package manager.
+2026-08-23T09:38:38Z INF Generated Connector ID: 3f892758-9e31-4748-bf8f-40d2c4a14076
+2026-08-23T09:38:38Z INF Initial protocol quic
+2026-08-23T09:38:38Z INF ICMP proxy will use 192.168.29.105 as source for IPv4
+2026-08-23T09:38:38Z INF ICMP proxy will use 2405:201:8029:7013:6064:7000:c543:438d in zone wlp45s0 as source for IPv6
+2026-08-23T09:38:38Z WRN The user running cloudflared process has a GID (group ID) that is not within ping_group_range. You might need to add that user to a group within that range, or instead update the range to encompass a group the user is already in by modifying /proc/sys/net/ipv4/ping_group_range. Otherwise cloudflared will not be able to ping this network error="Group ID 1000 is not between ping group 1 to 0"
+2026-08-23T09:38:38Z WRN ICMP proxy feature is disabled error="cannot create ICMPv4 proxy: Group ID 1000 is not between ping group 1 to 0 nor ICMPv6 proxy: socket: permission denied"
+2026-08-23T09:38:38Z INF ICMP proxy will use 192.168.29.105 as source for IPv4
+2026-08-23T09:38:38Z INF ICMP proxy will use 2405:201:8029:7013:6064:7000:c543:438d in zone wlp45s0 as source for IPv6
+2026-08-23T09:38:38Z INF Starting metrics server on 127.0.0.1:20241/metrics
+2026-08-23T09:38:38Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=2606:4700:a0::10
+--- CONNECTIVITY PRE-CHECKS ----------------------------------------------------
+COMPONENT         TARGET                     STATUS  DETAILS
+DNS Resolution    region1.v2.argotunnel.com  PASS    Resolved successfully
+DNS Resolution    region2.v2.argotunnel.com  PASS    Resolved successfully
+UDP Connectivity  region1.v2.argotunnel.com  PASS    Handshake successful
+UDP Connectivity  region2.v2.argotunnel.com  PASS    Handshake successful
+TCP Connectivity  region1.v2.argotunnel.com  PASS    TLS handshake successful
+TCP Connectivity  region2.v2.argotunnel.com  PASS    TLS handshake successful
+Cloudflare API    api.cloudflare.com:443     PASS    TCP port reachable (TLS not validated)
+
+SUMMARY: Environment is healthy. cloudflared will use 'quic' as primary protocol.
+--------------------------------------------------------------------------------
+
+2026-08-23T09:38:39Z INF precheck component="DNS Resolution" details="Resolved successfully" run_id=54a11456-812f-431a-b197-f588fd3fe3ba status=pass target=region1.v2.argotunnel.com
+2026-08-23T09:38:39Z INF precheck component="DNS Resolution" details="Resolved successfully" run_id=54a11456-812f-431a-b197-f588fd3fe3ba status=pass target=region2.v2.argotunnel.com
+2026-08-23T09:38:39Z INF precheck component="UDP Connectivity" details="Handshake successful" run_id=54a11456-812f-431a-b197-f588fd3fe3ba status=pass target=region1.v2.argotunnel.com
+2026-08-23T09:38:39Z INF precheck component="UDP Connectivity" details="Handshake successful" run_id=54a11456-812f-431a-b197-f588fd3fe3ba status=pass target=region2.v2.argotunnel.com
+2026-08-23T09:38:39Z INF precheck component="TCP Connectivity" details="TLS handshake successful" run_id=54a11456-812f-431a-b197-f588fd3fe3ba status=pass target=region1.v2.argotunnel.com
+2026-08-23T09:38:39Z INF precheck component="TCP Connectivity" details="TLS handshake successful" run_id=54a11456-812f-431a-b197-f588fd3fe3ba status=pass target=region2.v2.argotunnel.com
+2026-08-23T09:38:39Z INF precheck component="Cloudflare API" details="TCP port reachable (TLS not validated)" run_id=54a11456-812f-431a-b197-f588fd3fe3ba status=pass target=api.cloudflare.com:443
+2026-08-23T09:38:39Z INF precheck complete hard_fail=false run_id=54a11456-812f-431a-b197-f588fd3fe3ba suggested_protocol=quic
+2026-08-23T09:38:39Z INF Registered tunnel connection connIndex=0 connection=d5a1777b-0d0a-4e2f-8c92-d8ebc179f928 event=0 ip=2606:4700:a0::10 location=del02 protocol=quic
+2026-08-23T09:43:43Z ERR Failed to refresh DNS local resolver error="lookup region1.v2.argotunnel.com: i/o timeout"
+2026-08-23T10:00:15Z ERR failed to accept incoming stream requests error="failed to accept QUIC stream: timeout: no recent network activity" connIndex=0 event=0 ip=2606:4700:a0::10
+2026-08-23T10:00:15Z ERR failed to run the datagram handler error="timeout: no recent network activity" connIndex=0 event=0 ip=2606:4700:a0::10
+2026-08-23T10:00:15Z ERR failed to serve tunnel connection error="accept stream listener encountered a failure while serving" connIndex=0 event=0 ip=2606:4700:a0::10
+2026-08-23T10:00:15Z ERR Serve tunnel error error="accept stream listener encountered a failure while serving" connIndex=0 event=0 ip=2606:4700:a0::10
+2026-08-23T10:00:15Z INF Retrying connection in up to 1s connIndex=0 event=0 ip=2606:4700:a0::10
+2026-08-23T10:00:16Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=2606:4700:a0::10
+2026-08-23T10:00:21Z ERR Failed to dial a quic connection error="failed to dial to edge with quic: timeout: no recent network activity" connIndex=0 event=0 ip=2606:4700:a0::10
+2026-08-23T10:00:21Z INF Retrying connection in up to 4s connIndex=0 event=0 ip=2606:4700:a0::10
+2026-08-23T10:00:21Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.192.107
+2026-08-23T10:00:24Z INF Registered tunnel connection connIndex=0 connection=e570f4e2-f316-40fe-8eab-b8a1a1077578 event=0 ip=198.41.192.107 location=del02 protocol=quic
+2026-08-23T10:10:53Z ERR failed to accept incoming stream requests error="failed to accept QUIC stream: write udp [::]:50577->198.41.192.107:7844: sendmsg: network is unreachable" connIndex=0 event=0 ip=198.41.192.107
+2026-08-23T10:10:53Z ERR failed to run the datagram handler error="write udp [::]:50577->198.41.192.107:7844: sendmsg: network is unreachable" connIndex=0 event=0 ip=198.41.192.107
+2026-08-23T10:10:53Z WRN failed to serve tunnel connection error="accept stream listener encountered a failure while serving" connIndex=0 event=0 ip=198.41.192.107
+2026-08-23T10:10:53Z WRN Serve tunnel error error="accept stream listener encountered a failure while serving" connIndex=0 event=0 ip=198.41.192.107
+2026-08-23T10:10:53Z INF Retrying connection in up to 1s connIndex=0 event=0 ip=198.41.192.107
+2026-08-23T10:10:55Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.192.107
+2026-08-23T10:10:55Z ERR Failed to dial a quic connection error="failed to dial to edge with quic: write udp [::]:50577->198.41.192.107:7844: sendmsg: network is unreachable" connIndex=0 event=0 ip=198.41.192.107
+2026-08-23T10:10:55Z INF Retrying connection in up to 4s connIndex=0 event=0 ip=198.41.192.107
+2026-08-23T10:10:57Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=2606:4700:a8::3
+2026-08-23T10:10:57Z ERR Failed to dial a quic connection error="failed to dial to edge with quic: write udp [::]:50577->[2606:4700:a8::3]:7844: sendmsg: network is unreachable" connIndex=0 event=0 ip=2606:4700:a8::3
+2026-08-23T10:10:57Z INF Retrying connection in up to 8s connIndex=0 event=0 ip=2606:4700:a8::3
+2026-08-23T10:11:04Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=2606:4700:a0::3
+2026-08-23T10:11:04Z INF Registered tunnel connection connIndex=0 connection=86a3969b-1b10-4534-8c30-9c837b1998f7 event=0 ip=2606:4700:a0::3 location=del02 protocol=quic
+2026-08-23T10:11:12Z ERR failed to accept incoming stream requests error="failed to accept QUIC stream: write udp [::]:50577->[2606:4700:a0::3]:7844: sendmsg: network is unreachable" connIndex=0 event=0 ip=2606:4700:a0::3
+2026-08-23T10:11:12Z ERR failed to run the datagram handler error="write udp [::]:50577->[2606:4700:a0::3]:7844: sendmsg: network is unreachable" connIndex=0 event=0 ip=2606:4700:a0::3
+2026-08-23T10:11:12Z WRN failed to serve tunnel connection error="accept stream listener encountered a failure while serving" connIndex=0 event=0 ip=2606:4700:a0::3
+2026-08-23T10:11:12Z ERR Serve tunnel error error="accept stream listener encountered a failure while serving" connIndex=0 event=0 ip=2606:4700:a0::3
+2026-08-23T10:11:12Z INF Retrying connection in up to 1s connIndex=0 event=0 ip=2606:4700:a0::3
+2026-08-23T10:11:13Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=2606:4700:a0::3
+2026-08-23T10:11:13Z ERR Failed to dial a quic connection error="failed to dial to edge with quic: write udp [::]:50577->[2606:4700:a0::3]:7844: sendmsg: network is unreachable" connIndex=0 event=0 ip=2606:4700:a0::3
+2026-08-23T10:11:13Z INF Retrying connection in up to 4s connIndex=0 event=0 ip=2606:4700:a0::3
+2026-08-23T10:11:17Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.200.23
+2026-08-23T10:11:18Z INF Registered tunnel connection connIndex=0 connection=54816a55-e4df-4be2-a716-2bd7140f8962 event=0 ip=198.41.200.23 location=del03 protocol=quic
+2026-08-23T10:35:52Z ERR  error="Unable to reach the origin service. The service may be down or it may not be responding to traffic from cloudflared: dial tcp 127.0.0.1:5173: connect: connection refused" connIndex=0 event=1 ingressRule=0 originService=http://localhost:5173
+2026-08-23T10:35:52Z ERR Request failed error="Unable to reach the origin service. The service may be down or it may not be responding to traffic from cloudflared: dial tcp 127.0.0.1:5173: connect: connection refused" connIndex=0 dest=https://tiles-gaming-losses-wma.trycloudflare.com/api/get-billing-details event=0 ip=198.41.200.23 type=http
+2026-08-23T10:35:52Z ERR  error="Unable to reach the origin service. The service may be down or it may not be responding to traffic from cloudflared: dial tcp 127.0.0.1:5173: connect: connection refused" connIndex=0 event=1 ingressRule=0 originService=http://localhost:5173
+2026-08-23T10:35:52Z ERR Request failed error="Unable to reach the origin service. The service may be down or it may not be responding to traffic from cloudflared: dial tcp 127.0.0.1:5173: connect: connection refused" connIndex=0 dest=https://tiles-gaming-losses-wma.trycloudflare.com/ event=0 ip=198.41.200.23 type=ws
+2026-08-23T10:52:36Z ERR  error="Unable to reach the origin service. The service may be down or it may not be responding to traffic from cloudflared: dial tcp 127.0.0.1:5173: connect: connection refused" connIndex=0 event=1 ingressRule=0 originService=http://localhost:5173
+2026-08-23T10:52:36Z ERR Request failed error="Unable to reach the origin service. The service may be down or it may not be responding to traffic from cloudflared: dial tcp 127.0.0.1:5173: connect: connection refused" connIndex=0 dest=https://tiles-gaming-losses-wma.trycloudflare.com/api/get-billing-details event=0 ip=198.41.200.23 type=http
+2026-08-23T10:52:36Z ERR  error="Unable to reach the origin service. The service may be down or it may not be responding to traffic from cloudflared: dial tcp 127.0.0.1:5173: connect: connection refused" connIndex=0 event=1 ingressRule=0 originService=http://localhost:5173
+2026-08-23T10:52:36Z ERR Request failed error="Unable to reach the origin service. The service may be down or it may not be responding to traffic from cloudflared: dial tcp 127.0.0.1:5173: connect: connection refused" connIndex=0 dest=https://tiles-gaming-losses-wma.trycloudflare.com/ event=0 ip=198.41.200.23 type=ws
+2026-08-23T10:56:48Z INF Initiating graceful shutdown due to signal terminated ...
+2026-08-23T10:56:48Z ERR failed to run the datagram handler error="context canceled" connIndex=0 event=0 ip=198.41.200.23
+2026-08-23T10:56:48Z ERR failed to serve tunnel connection error="accept stream listener encountered a failure while serving" connIndex=0 event=0 ip=198.41.200.23
+2026-08-23T10:56:48Z ERR Serve tunnel error error="accept stream listener encountered a failure while serving" connIndex=0 event=0 ip=198.41.200.23
+2026-08-23T10:56:48Z INF Retrying connection in up to 1s connIndex=0 event=0 ip=198.41.200.23
+2026-08-23T10:56:48Z ERR Connection terminated connIndex=0
+2026-08-23T10:56:48Z ERR no more connections active and exiting
+2026-08-23T10:56:48Z INF Tunnel server stopped
+2026-08-23T10:56:48Z INF Metrics server stopped

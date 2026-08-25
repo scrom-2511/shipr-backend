@@ -1,6 +1,10 @@
 pub mod add_credits;
+pub mod auto_reload;
+pub mod dodo_checkout;
+pub mod dodo_client;
+pub mod dodo_client_ext;
+pub mod dodo_webhook;
 pub mod get_billing_details;
-pub mod stripe_checkout;
-pub mod stripe_client;
-pub mod stripe_webhook;
-
+pub mod onDemand;
+pub mod payment_confirmation;
+pub mod topup;

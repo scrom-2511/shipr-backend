@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use actix_web::web;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, broadcast::Sender};
+
+use crate::app::models::ProjectType;
 pub type LogsStore = web::Data<Mutex<HashMap<String, Sender<String>>>>;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -65,23 +67,6 @@ pub enum JobType {
     Deploy,
     Run,
     Redeploy,
-}
-
-use sea_orm::entity::prelude::*;
-
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, Copy, EnumIter, DeriveActiveEnum)]
-#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "project_type")]
-pub enum ProjectType {
-    #[sea_orm(string_value = "html")]
-    Html,
-    #[sea_orm(string_value = "rust")]
-    Rust,
-    #[sea_orm(string_value = "react")]
-    React,
-    #[sea_orm(string_value = "node")]
-    Node,
-    #[sea_orm(string_value = "unknown")]
-    Unknown,
 }
 
 impl fmt::Display for ProjectType {

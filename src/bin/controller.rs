@@ -8,7 +8,7 @@ pub mod worker;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    dotenv::dotenv().ok();
+    dotenvy::dotenv().ok();
 
     rustls::crypto::ring::default_provider()
         .install_default()

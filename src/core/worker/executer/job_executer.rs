@@ -1,9 +1,10 @@
 use std::fs;
 
 use crate::{
+    app::models::ProjectType,
     app_errors::AppError,
     core::{
-        app_types::{DeployDetails, JobType, ProjectType, RedeployDetails, RunDetails, ShiprJson},
+        app_types::{DeployDetails, JobType, RedeployDetails, RunDetails, ShiprJson},
         config::app_config::get_worker_dir,
         infra::{detect::detect_project_type, process::run_script},
         worker::{

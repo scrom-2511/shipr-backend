@@ -39,22 +39,31 @@ pub async fn signin_controller(
         .filter(users::Column::Email.eq(&signin.email))
         .one(pool.as_ref())
         .await
-        .map_err(|e| AppError::Database(e.to_string()))?
+        .map_err(|e| {
+            eprintln!("[Signin DB Error] {:?}", e);
+            AppError::Database(e.to_string())
+        })?
         .ok_or(AppError::UserNotFound)?;
 
     println!("User found");
 
     let is_valid = bcrypt::verify(&signin.password, &user.password)
-        .map_err(|_| AppError::PasswordHashFailed)?;
+        .map_err(|e| {
+            eprintln!("[Signin Bcrypt Error] {:?}", e);
+            AppError::PasswordHashFailed
+        })?;
 
-    println!("Password verified");
+    println!("Password verified: {}", is_valid);
 
     if !is_valid {
         println!("Invalid credentials");
         return Err(AppError::InvalidCredentials);
     }
 
-    let token = generate_token(user.id)?;
+    let token = generate_token(user.id).map_err(|e| {
+        eprintln!("[Signin Token Error] {:?}", e);
+        e
+    })?;
 
     Ok(HttpResponse::Ok()
         .cookie(

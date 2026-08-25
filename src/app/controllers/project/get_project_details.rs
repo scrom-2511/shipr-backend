@@ -3,9 +3,9 @@ use crate::app::db::DbPool;
 use crate::app::middlewares::AuthMiddleware;
 use crate::app::models::projects;
 use crate::app_errors::AppError;
-use crate::core::app_types::ProjectType;
 use crate::core::config::project_default_config::get_default_config;
-use actix_web::{web, HttpMessage, HttpRequest, HttpResponse};
+
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, web};
 use chrono::NaiveDateTime;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::Serialize;
@@ -50,8 +50,6 @@ pub async fn get_project_details_controller(
         })?
         .user_id;
 
-    println!("user_id: {}", user_id);
-
     let project_id = query.project_id;
 
     let row = projects::Entity::find()
@@ -68,64 +66,50 @@ pub async fn get_project_details_controller(
             AppError::Database("Project not found".to_string())
         })?;
 
-    let status = match row.status.as_str() {
-        "active" => "active",
-        "deploying" => "building",
-        "error" => "error",
-        _ => "error",
+    let status = match row.status {
+        crate::app::models::ProjectStatus::Deploying => "building",
+        crate::app::models::ProjectStatus::Running => "running",
+        crate::app::models::ProjectStatus::Stopped => "stopped",
+        crate::app::models::ProjectStatus::Ready => "ready",
+        crate::app::models::ProjectStatus::ErrorStatus => "error",
     };
 
-    let p_type = row.project_type.unwrap_or(ProjectType::Unknown);
+    let config = get_default_config(&row.project_type);
 
-    let install_cmds = if row.install_cmds.is_none() {
-        let install_cmds = get_default_config(&p_type)
-            .install_commands
-            .into_iter()
-            .map(String::from)
-            .collect();
-        Some(install_cmds)
-    } else {
-        row.install_cmds
-    };
+    let install_cmds = config
+        .install_commands
+        .into_iter()
+        .map(String::from)
+        .collect();
 
-    let build_cmds = if row.build_cmds.is_none() {
-        let build_cmds = get_default_config(&p_type)
-            .build_commands
-            .into_iter()
-            .map(String::from)
-            .collect();
-        Some(build_cmds)
-    } else {
-        row.build_cmds
-    };
+    let build_cmds = config
+        .build_commands
+        .into_iter()
+        .map(String::from)
+        .collect();
 
-    let run_cmds = if row.run_cmds.is_none() {
-        let run_cmds = get_default_config(&p_type)
-            .run_commands
-            .unwrap_or_default()
-            .into_iter()
-            .map(String::from)
-            .collect();
-        Some(run_cmds)
-    } else {
-        row.run_cmds
-    };
+    let run_cmds = config
+        .run_commands
+        .unwrap_or_default()
+        .into_iter()
+        .map(String::from)
+        .collect();
 
     let project = ProjectDetail {
         id: row.id,
         project_id: row.project_id,
         full_name: row.full_name,
-        branch: row.branch.unwrap_or_default(),
+        branch: row.branch,
         status: status.to_string(),
         last_deployment_time: row
             .last_deployment_time
             .unwrap_or_else(|| chrono::Utc::now().naive_utc()),
         root_dir: row.root_dir,
-        install_cmds: install_cmds.unwrap_or_default(),
-        build_cmds: build_cmds.unwrap_or_default(),
-        run_cmds: run_cmds.unwrap_or_default(),
+        install_cmds,
+        build_cmds,
+        run_cmds,
         github_url: row.url.unwrap_or_default(),
-        commit_hash: row.commit_hash.unwrap_or_default(),
+        commit_hash: row.commit_hash,
     };
 
     println!(

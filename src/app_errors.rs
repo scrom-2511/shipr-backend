@@ -1,4 +1,3 @@
-
 use actix_web::{HttpResponse, ResponseError, http::StatusCode};
 use aws_sdk_s3::presigning::PresigningConfigError;
 use sea_orm::DbErr;
@@ -140,6 +139,9 @@ pub enum AppError {
 
     #[error("Bad request: {0}")]
     BadRequest(String),
+
+    #[error("Dodo error: {0}")]
+    DodoError(String),
 }
 
 impl ResponseError for AppError {

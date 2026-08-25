@@ -16,11 +16,9 @@ pub async fn is_logged_in(
 ) -> Result<ServiceResponse<impl MessageBody>, Error> {
     let auth_token = req.cookie("token");
 
+    // println!("auth_token is {:?}", auth_token);
+
     if auth_token.is_some() {
-        println!(
-            "auth_token is some, {}",
-            auth_token.as_ref().unwrap().value()
-        );
         let decoded = decode_token(auth_token.unwrap().value());
 
         match decoded {

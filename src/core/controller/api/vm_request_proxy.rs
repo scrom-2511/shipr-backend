@@ -1,4 +1,5 @@
 use crate::app::db::DbPool;
+use crate::app::models::{project_traffic, projects};
 use crate::app_errors::AppError;
 use crate::core::app_types::JobType;
 use crate::core::controller::dispatcher::job_dispatcher::JobDispatcher;
@@ -11,6 +12,7 @@ use actix_web::{HttpRequest, HttpResponse, web};
 use redis::AsyncCommands;
 use reqwest::header::{HeaderName, HeaderValue};
 use reqwest::{Client, Method};
+use sea_orm::{ActiveModelTrait, EntityTrait, Set};
 use std::str::FromStr;
 use std::time::Duration;
 use tokio::net::TcpStream;
@@ -220,32 +222,28 @@ impl VmRequestProxy {
     }
 
     async fn track_traffic(&self, project_id: i32) -> Result<(), AppError> {
-        use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
-        use crate::app::models::project_traffic;
-
-        let today = chrono::Utc::now().naive_utc().date();
-
-        let traffic = project_traffic::Entity::find()
-            .filter(project_traffic::Column::ProjectId.eq(project_id))
-            .filter(project_traffic::Column::Date.eq(today))
+        let project = project_traffic::Entity::find_by_id(project_id)
             .one(&self.pool)
             .await
             .map_err(|e| AppError::Database(e.to_string()))?;
 
-        match traffic {
-            Some(t) => {
-                let mut active: project_traffic::ActiveModel = t.into();
-                active.request_count = Set(active.request_count.unwrap() + 1);
-                active.update(&self.pool).await.map_err(|e| AppError::Database(e.to_string()))?;
+        match project {
+            Some(project) => {
+                let mut active: project_traffic::ActiveModel = project.clone().into();
+
+                active.request_count = Set(project.request_count + 1);
+
+                active
+                    .update(&self.pool)
+                    .await
+                    .map_err(|e| AppError::Database(e.to_string()))?;
             }
+
             None => {
-                let new_traffic = project_traffic::ActiveModel {
-                    project_id: Set(project_id),
-                    date: Set(today),
-                    request_count: Set(1),
-                    ..Default::default()
-                };
-                new_traffic.insert(&self.pool).await.map_err(|e| AppError::Database(e.to_string()))?;
+                return Err(AppError::Database(format!(
+                    "Project {} not found",
+                    project_id
+                )));
             }
         }
 

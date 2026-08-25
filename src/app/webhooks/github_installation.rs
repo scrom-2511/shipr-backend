@@ -59,7 +59,7 @@ pub async fn github_webhook_installation(
     println!("installation_id: {:?}", installation_id);
 
     let new_repo = github_repos::ActiveModel {
-        installation_ids: Set(installation_id),
+        installation_ids: Set(Some(installation_id)),
         ..Default::default()
     };
 

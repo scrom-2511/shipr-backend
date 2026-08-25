@@ -206,15 +206,16 @@ impl JobDispatcher {
             .ok_or_else(|| AppError::Database("Project not found".to_string()))?;
 
         let envs: Option<Vec<EnvVar>> = match project.envs {
-            Some(encrypted_envs_vec) => {
-                if let Some(encrypted_envs) = encrypted_envs_vec.first() {
-                    let decrypted = crate::shared::crypto::Crypto::decrypt(encrypted_envs);
-                    Some(serde_json::from_str(&decrypted).map_err(|e| {
-                        AppError::Database(format!("Failed to deserialize envs: {}", e))
-                    })?)
-                } else {
-                    None
-                }
+            Some(encrypted_envs) => {
+                let encrypted_envs = encrypted_envs.as_str().ok_or_else(|| {
+                    AppError::Database("Invalid envs: expected encrypted string".to_string())
+                })?;
+
+                let decrypted = crate::shared::crypto::Crypto::decrypt(encrypted_envs);
+
+                Some(serde_json::from_str(&decrypted).map_err(|e| {
+                    AppError::Database(format!("Failed to deserialize envs: {}", e))
+                })?)
             }
             None => None,
         };
@@ -279,16 +280,20 @@ impl JobDispatcher {
                 .ok_or_else(|| AppError::Database("Project not found".to_string()))?;
 
             let envs: Option<Vec<EnvVar>> = match project.envs {
-                Some(encrypted_envs_vec) => {
-                    if let Some(encrypted_envs) = encrypted_envs_vec.first() {
-                        let decrypted = crate::shared::crypto::Crypto::decrypt(encrypted_envs);
-                        Some(serde_json::from_str(&decrypted).map_err(|e| {
-                            AppError::Database(format!("Failed to deserialize envs: {}", e))
-                        })?)
-                    } else {
-                        None
-                    }
+                Some(encrypted_envs) => {
+                    let encrypted_envs = encrypted_envs.as_str().ok_or_else(|| {
+                        AppError::Database(
+                            "Invalid envs JSONB: expected encrypted string".to_string(),
+                        )
+                    })?;
+
+                    let decrypted = crate::shared::crypto::Crypto::decrypt(encrypted_envs);
+
+                    Some(serde_json::from_str(&decrypted).map_err(|e| {
+                        AppError::Database(format!("Failed to deserialize envs: {}", e))
+                    })?)
                 }
+
                 None => None,
             };
 

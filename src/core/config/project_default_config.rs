@@ -1,4 +1,4 @@
-use crate::core::app_types::ProjectType;
+use crate::app::models::ProjectType;
 
 #[derive(Debug)]
 pub struct ProjectDefaultConfig {

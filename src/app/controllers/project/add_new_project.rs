@@ -1,7 +1,7 @@
 use crate::app::db::DbPool;
 use crate::app::models::projects;
 use crate::app_errors::AppError;
-use actix_web::{web, HttpResponse};
+use actix_web::{HttpResponse, web};
 use sea_orm::{ActiveModelTrait, Set};
 use serde::{Deserialize, Serialize};
 use validator::Validate;
@@ -50,14 +50,10 @@ pub async fn add_new_project(
     let new_project = projects::ActiveModel {
         full_name: Set(project.name),
         project_id: Set(project.slug),
-        install_cmds: Set(project.install_cmds),
-        run_cmds: Set(project.run_cmds),
-        build_cmds: Set(project.build_cmds),
-        dist_dir: Set(Some(project.dist_dir)),
         root_dir: Set(project.root_dir),
         url: Set(Some(project.url)),
         user_id: Set(project.user_id),
-        status: Set("active".to_string()),
+        status: Set(crate::app::models::ProjectStatus::Stopped),
         ..Default::default()
     };
 

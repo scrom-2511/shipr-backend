@@ -1,10 +1,7 @@
 use reqwest::Client;
 use serde_json::json;
 
-use crate::{
-    app_errors::AppError,
-    core::app_types::{JobType, ProjectType},
-};
+use crate::{app::models::ProjectType, app_errors::AppError, core::app_types::JobType};
 
 pub struct Host {
     client: Client,

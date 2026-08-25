@@ -1,10 +1,10 @@
-use crate::app::controllers::ApiResponse;
 use crate::app::db::DbPool;
 use crate::app::middlewares::AuthMiddleware;
 use crate::app::models::projects;
+use crate::app::{controllers::ApiResponse, models::ProjectStatus};
 use crate::app_errors::AppError;
 
-use actix_web::{web, HttpMessage, HttpRequest, HttpResponse};
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, web};
 use chrono::NaiveDateTime;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
 use serde::Serialize;
@@ -15,7 +15,7 @@ struct DeployedProject {
     project_id: String,
     branch: String,
     full_name: String,
-    status: String,
+    status: ProjectStatus,
     last_deployment_time: NaiveDateTime,
 }
 
@@ -49,7 +49,7 @@ pub async fn get_all_deployed_projects_controller(
         .map(|row| DeployedProject {
             id: row.id,
             project_id: row.project_id,
-            branch: row.branch.unwrap_or_default(),
+            branch: row.branch,
             full_name: row.full_name,
             status: row.status,
             last_deployment_time: row

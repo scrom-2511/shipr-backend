@@ -12,3 +12,5 @@ current.txt
 .env
 *.md
 /*.md
+temp.*
+migration/target

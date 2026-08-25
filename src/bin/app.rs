@@ -2,14 +2,19 @@ use std::error::Error;
 
 use actix_web::middleware::from_fn;
 use actix_web::{App, HttpServer, web};
-use dotenv::dotenv;
+use dodopayments::Client;
+use dotenvy::dotenv;
+use sea_orm::ConnectOptions;
 use shipr::app::controllers::auth::github_signup::{github_auth_url, github_callback};
 use shipr::app::controllers::auth::signin::signin_controller;
 use shipr::app::controllers::auth::signup::signup_controller;
-use shipr::app::controllers::billing::add_credits::add_credits_controller;
+use shipr::app::controllers::billing::dodo_checkout::dodo_checkout_controller;
+use shipr::app::controllers::billing::dodo_webhook::dodo_webhook_controller;
 use shipr::app::controllers::billing::get_billing_details::get_billing_details_controller;
-use shipr::app::controllers::billing::stripe_checkout::checkout_controller;
-use shipr::app::controllers::billing::stripe_webhook::stripe_webhook_controller;
+use shipr::app::controllers::billing::onDemand::auto_top_up;
+use shipr::app::controllers::billing::onDemand::dodo_ondemand_checkout::dodo_ondemand_checkout_controller;
+use shipr::app::controllers::billing::payment_confirmation::payment_confirmation_controller;
+// use shipr::app::controllers::billing::topup::topup_handler;
 use shipr::app::controllers::github::get_state::get_state;
 use shipr::app::controllers::github::update_userid_github_app_installations::update_userid_github_app_installations;
 use shipr::app::controllers::project::add_new_project::add_new_project;
@@ -21,6 +26,7 @@ use shipr::app::controllers::project::get_all_github_app_installed_repos::get_al
 use shipr::app::controllers::project::get_project_details::get_project_details_controller;
 use shipr::app::controllers::project::get_project_traffic::get_project_traffic_controller;
 use shipr::app::controllers::project::job_completed::job_completed_controller;
+use shipr::app::state::AppState;
 
 use shipr::app::controllers::project::kill_vm_controller::kill_vm_controller;
 use shipr::app::middlewares::is_logged_in::is_logged_in;
@@ -35,7 +41,6 @@ use shipr::core::controller::queue::lapin::Lapin;
 use shipr::core::controller::queue::redeploy_queue::ReDeployQueue;
 use shipr::core::controller::storage::redis::Redis;
 use shipr::core::controller::storage::s3::S3Service;
-use shipr::core::controller::vm::firecracker::Firecracker;
 use shipr::core::controller::vm::heartbeat_store::HeartbeatStore;
 use shipr::core::controller::vm::id_allocator::IdAllocator;
 use shipr::core::controller::vm::vm_pool::VmPool;
@@ -48,18 +53,36 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .install_default()
         .expect("failed to install rustls crypto provider");
 
-    let db_url = "postgresql://neondb_owner:npg_RlYICzb47Sps@ep-weathered-mode-aqn5uvc3-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require";
+    let db_url = std::env::var("DATABASE_URL");
 
-    let pool = sea_orm::Database::connect(db_url).await?;
+    if db_url.is_err() {
+        return Err("DATABASE_URL not found".into());
+    }
+
+    let pool = sea_orm::Database::connect(&db_url.unwrap()).await?;
 
     println!("Connected to database");
 
-    use sea_orm_migration::MigratorTrait;
-    use shipr::app::migrations::Migrator;
+    let product_id =
+        std::env::var("DODO_PRODUCT_ID").unwrap_or_else(|_| "pdt_compute_credits".to_string());
 
-    Migrator::up(&pool, None).await?;
+    let client = Client::from_env();
 
-    println!("Migrations applied successfully");
+    let client = match client {
+        Ok(c) => {
+            println!("{:?}", c);
+            c
+        }
+        Err(_) => return Err("Failed to load DODO credentials".into()),
+    };
+
+    let client_arc = std::sync::Arc::new(client);
+
+    let app_state = web::Data::new(AppState {
+        db: pool.clone(),
+        client: client_arc.clone(),
+        product_id,
+    });
 
     println!("Server running on port 9000");
 
@@ -77,10 +100,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         pool.clone(),
     );
 
-    for _ in 0..1 {
-        let mut new_vm = Firecracker::new_from_id_allocator(&id_allocator).await;
-        new_vm.create_hot_vm(&vm_pool).await?;
-    }
+    // for _ in 0..1 {
+    //     let mut new_vm = Firecracker::new_from_id_allocator(&id_allocator).await;
+    //     new_vm.create_hot_vm(&vm_pool).await?;
+    // }
 
     let lapin_conn = Lapin::new().await?;
     let deploy_queue = web::Data::new(DeployQueue::new(&lapin_conn).await?);
@@ -149,7 +172,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     HttpServer::new(move || {
         let cors = actix_cors::Cors::default()
-            .allowed_origin("https://notifications-dining-manor-watched.trycloudflare.com")
+            .allowed_origin("https://healthcare-camcorders-oecd-flour.trycloudflare.com")
             .allowed_origin("http://localhost:5173")
             .allow_any_method()
             .allow_any_header()
@@ -157,6 +180,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .max_age(3600);
 
         App::new()
+            .app_data(app_state.clone())
             .app_data(deploy_queue.clone())
             .app_data(redeploy_queue.clone())
             .app_data(idle_kill_queue.clone())
@@ -164,23 +188,43 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .app_data(web::Data::new(vm_pool.clone()))
             .wrap(cors)
             .app_data(web::Data::new(pool.clone()))
+            // .route("/api/billing/topup", web::post().to(topup_handler))
+            .route("/webhooks/dodo", web::post().to(dodo_webhook_controller))
             .route("/signup", web::post().to(signup_controller))
             .route("/signin", web::post().to(signin_controller))
             .route("/add-project", web::post().to(add_new_project))
             .route("/auth/github", web::get().to(github_auth_url))
             .route("/auth/github/callback", web::get().to(github_callback))
             .route("/webhook/github", web::post().to(github_event))
-            .route("/check-repo-name-availability", web::post().to(check_repo_name_availability))
+            .route(
+                "/check-repo-name-availability",
+                web::post().to(check_repo_name_availability),
+            )
             .route("/job-completed", web::post().to(job_completed_controller))
             .route("/kill-vm", web::post().to(kill_vm_controller))
-            .route("/api/webhooks/stripe", web::post().to(stripe_webhook_controller))
-            .route("/webhook/stripe", web::post().to(stripe_webhook_controller))
-            .route("/api/checkout", web::post().to(checkout_controller))
-            .route("/checkout", web::post().to(checkout_controller))
+            .route(
+                "/on-demand-checkout",
+                web::post().to(dodo_ondemand_checkout_controller),
+            )
+            .route("/auto-top-up", web::post().to(auto_top_up::auto_top_up))
+            .route(
+                "/webhook/dodo-payments",
+                web::post().to(dodo_webhook_controller),
+            )
+            // .route(
+            //     "/api/webhooks/dodo-payments",
+            //     web::post().to(dodo_webhook_controller),
+            // )
+            // .route("/api/checkout", web::post().to(dodo_checkout_controller))
             .service(
                 web::scope("")
                     .wrap(from_fn(is_logged_in))
                     .route("/get-state", web::get().to(get_state))
+                    .route("/checkout", web::post().to(dodo_checkout_controller))
+                    .route(
+                        "/payment-confirmation",
+                        web::get().to(payment_confirmation_controller),
+                    )
                     .route(
                         "/github/update-userid-github-app-installations",
                         web::post().to(update_userid_github_app_installations),
@@ -210,9 +254,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         "/get-billing-details",
                         web::get().to(get_billing_details_controller),
                     )
-                    .route("/add-credits", web::post().to(add_credits_controller))
-                    .route("/api/checkout", web::post().to(checkout_controller))
-                    .route("/checkout", web::post().to(checkout_controller)),
+                    .route("/api/checkout", web::post().to(dodo_checkout_controller))
+                    .route("/checkout", web::post().to(dodo_checkout_controller)),
             )
     })
     .bind(("127.0.0.1", 3000))?

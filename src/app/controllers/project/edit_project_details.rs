@@ -1,4 +1,4 @@
-use actix_web::{web, HttpResponse};
+use actix_web::{HttpResponse, web};
 use sea_orm::{ActiveModelTrait, EntityTrait, Set};
 use serde::Deserialize;
 
@@ -33,20 +33,13 @@ pub async fn edit_project_details_controller(
     let mut active_project: projects::ActiveModel = project.into();
     active_project.project_id = Set(body.name.clone());
     active_project.url = Set(Some(body.url.clone()));
-    active_project.branch = Set(Some(body.branch.clone()));
     active_project.root_dir = Set(body.root_dir.clone());
-    active_project.dist_dir = Set(Some(body.dist_dir.clone()));
-    active_project.install_cmds = Set(body.install_cmds.clone());
-    active_project.build_cmds = Set(body.build_cmds.clone());
-    active_project.run_cmds = Set(body.run_cmds.clone());
+    active_project.branch = Set(body.branch.to_owned());
 
-    active_project
-        .update(pool.as_ref())
-        .await
-        .map_err(|e| {
-            println!("DB ERROR: {:?}", e);
-            AppError::Database(e.to_string())
-        })?;
+    active_project.update(pool.as_ref()).await.map_err(|e| {
+        println!("DB ERROR: {:?}", e);
+        AppError::Database(e.to_string())
+    })?;
 
     Ok(HttpResponse::Ok().json(ApiResponse::<()> {
         success: true,

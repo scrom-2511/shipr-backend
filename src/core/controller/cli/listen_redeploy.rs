@@ -134,12 +134,15 @@ pub async fn listen_redeploy(
                 }
             };
 
-            let envs = if let Some(envs_vec) = &project.envs {
-                if let Some(encrypted_envs) = envs_vec.first() {
-                    let json = crate::shared::crypto::Crypto::decrypt(encrypted_envs);
-                    serde_json::from_str::<Vec<crate::core::app_types::EnvVar>>(&json).ok()
-                } else {
+            let envs = if let Some(envs_json) = &project.envs {
+                let encrypted_envs = envs_json.as_str().unwrap_or("");
+
+                if encrypted_envs.is_empty() {
                     None
+                } else {
+                    let decrypted = crate::shared::crypto::Crypto::decrypt(encrypted_envs);
+
+                    serde_json::from_str::<Vec<crate::core::app_types::EnvVar>>(&decrypted).ok()
                 }
             } else {
                 None

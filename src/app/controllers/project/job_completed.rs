@@ -2,7 +2,7 @@ use crate::app::db::DbPool;
 use crate::app::models::projects;
 use crate::app_errors::AppError;
 use crate::core::app_types::{JobCompletedReq, JobType};
-use actix_web::{web, HttpResponse};
+use actix_web::{HttpResponse, web};
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use serde_json::json;
 
@@ -32,15 +32,15 @@ pub async fn job_completed_controller(
 
     let mut active_project: projects::ActiveModel = project.into();
     active_project.last_deployment_time = Set(Some(now));
-    active_project.project_type = Set(Some(body.project_type));
-    active_project.status = Set("active".to_string());
+    active_project.project_type = Set(body.project_type);
+    active_project.status = Set(crate::app::models::ProjectStatus::Running);
 
     if body.job_type == JobType::Deploy || body.job_type == JobType::Redeploy {
         if let Some(hash) = body.commit_hash {
-            active_project.commit_hash = Set(Some(hash));
+            active_project.commit_hash = Set(hash);
         }
         if let Some(b) = body.branch {
-            active_project.branch = Set(Some(b));
+            active_project.branch = Set(b);
         }
     }
 

@@ -1,6 +1,6 @@
 use std::{fs, path::Path};
 
-use crate::core::app_types::ProjectType;
+use crate::app::models::ProjectType;
 
 pub fn detect_project_type(path: &str) -> ProjectType {
     println!("path is: {:?}", path);

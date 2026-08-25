@@ -1,11 +1,10 @@
-use actix_web::{web, HttpMessage, HttpRequest, HttpResponse};
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, web};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::Serialize;
 
 use crate::{
     app::{
-        controllers::ApiResponse, db::DbPool, middlewares::AuthMiddleware,
-        models::github_repos,
+        controllers::ApiResponse, db::DbPool, middlewares::AuthMiddleware, models::github_repos,
     },
     app_errors::AppError,
     shared::github_app::GithubApp,
@@ -45,21 +44,24 @@ pub async fn get_all_github_app_installed_repos(
     let mut all_repos = Vec::new();
 
     for installation in github_app_installations {
-        for id in installation.installation_ids {
-            let installation_access_token = github.get_installation_access_token(id as u64).await?;
-            let repos = github
-                .get_user_installed_repos(&installation_access_token)
-                .await?;
-            let repos = repos
-                .iter()
-                .map(|repo| GithubAppInstalledRepo {
-                    id: repo.id,
-                    name: repo.name.clone(),
-                    full_name: repo.full_name.clone(),
-                    installation_id: id,
-                })
-                .collect::<Vec<GithubAppInstalledRepo>>();
-            all_repos.extend(repos);
+        if let Some(installation_ids) = installation.installation_ids {
+            for id in installation_ids {
+                let installation_access_token =
+                    github.get_installation_access_token(id as u64).await?;
+
+                let repos = github
+                    .get_user_installed_repos(&installation_access_token)
+                    .await?;
+
+                for repo in repos {
+                    all_repos.push(GithubAppInstalledRepo {
+                        id: repo.id,
+                        name: repo.name.clone(),
+                        full_name: repo.full_name.clone(),
+                        installation_id: id,
+                    });
+                }
+            }
         }
     }
 
