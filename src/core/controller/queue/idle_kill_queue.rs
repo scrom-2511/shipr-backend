@@ -3,8 +3,8 @@ use lapin::{
     BasicProperties, Channel, Queue,
     message::Delivery,
     options::{
-        BasicConsumeOptions, BasicPublishOptions, ExchangeDeclareOptions,
-        QueueBindOptions, QueueDeclareOptions,
+        BasicConsumeOptions, BasicPublishOptions, ExchangeDeclareOptions, QueueBindOptions,
+        QueueDeclareOptions,
     },
     types::{AMQPValue, FieldTable, LongString, ShortString},
 };
@@ -15,7 +15,7 @@ use crate::{app_errors::AppError, core::controller::queue::lapin::Lapin};
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct IdleKillReq {
     pub project_id: String,
-    pub numeric_id: i32,
+    pub project_id_int: i32,
 }
 
 #[derive(Clone)]

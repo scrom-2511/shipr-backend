@@ -70,14 +70,14 @@ impl VmRequestProxy {
         let cached: Option<String> = conn.get(&cache_key).await?;
 
         if let Some(val) = cached
-            && let Some((project_id_str, numeric_id_str)) = val.split_once(':')
-            && let Ok(numeric_id) = numeric_id_str.parse::<i32>()
+            && let Some((project_id_str, project_id_int_str)) = val.split_once(':')
+            && let Ok(project_id_int) = project_id_int_str.parse::<i32>()
         {
             println!(
                 "Found project ids in redis: {} (slug), {} (id) for name: {}",
-                project_id_str, numeric_id, name
+                project_id_str, project_id_int, name
             );
-            return Ok((project_id_str.to_string(), numeric_id, uri));
+            return Ok((project_id_str.to_string(), project_id_int, uri));
         }
 
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
@@ -89,17 +89,17 @@ impl VmRequestProxy {
             .ok_or_else(|| AppError::Database(format!("Project with name {} not found", name)))?;
 
         let project_id_str = project.project_id;
-        let numeric_id = project.id;
+        let project_id_int = project.id;
 
-        let cache_val = format!("{}:{}", project_id_str, numeric_id);
+        let cache_val = format!("{}:{}", project_id_str, project_id_int);
         let _: () = conn.set_ex(&cache_key, &cache_val, 3600).await?;
 
         println!(
             "Found project ids in db: {} (slug), {} (id) for name: {} and cached it",
-            project_id_str, numeric_id, name
+            project_id_str, project_id_int, name
         );
 
-        Ok((project_id_str, numeric_id, uri))
+        Ok((project_id_str, project_id_int, uri))
     }
 
     fn build_target_url(&self, base_id: u8, uri: Uri) -> Url {
@@ -163,19 +163,19 @@ impl VmRequestProxy {
         req: HttpRequest,
         body: web::Bytes,
     ) -> Result<HttpResponse, AppError> {
-        let (project_id, numeric_id, target_path) = self.extract_project_and_path(&req).await?;
+        let (project_id, project_id_int, target_path) = self.extract_project_and_path(&req).await?;
 
-        if let Err(e) = self.idle_vm_manager(&project_id, numeric_id).await {
+        if let Err(e) = self.idle_vm_manager(&project_id, project_id_int).await {
             println!(
                 "Warning: Failed to update idle vm manager for project {}: {}",
-                numeric_id, e
+                project_id_int, e
             );
         }
 
-        if let Err(e) = self.track_traffic(numeric_id).await {
+        if let Err(e) = self.track_traffic(project_id_int).await {
             println!(
                 "Warning: Failed to track traffic for project {}: {}",
-                numeric_id, e
+                project_id_int, e
             );
         }
 
@@ -234,7 +234,7 @@ impl VmRequestProxy {
         Ok(())
     }
 
-    async fn idle_vm_manager(&self, project_id: &str, numeric_id: i32) -> Result<(), AppError> {
+    async fn idle_vm_manager(&self, project_id: &str, project_id_int: i32) -> Result<(), AppError> {
         let start_time_key = format!("project:vm_start_time:{}", project_id);
 
         let last_activity_key = format!("project:last_request_time:{}", project_id);
@@ -251,7 +251,7 @@ impl VmRequestProxy {
             self.idle_kill_queue
                 .add_to_queue(&IdleKillReq {
                     project_id: project_id.to_owned(),
-                    numeric_id,
+                    project_id_int,
                 })
                 .await?;
         }
@@ -260,6 +260,7 @@ impl VmRequestProxy {
 
         Ok(())
     }
+
     async fn wait_for_port(
         &self,
         base_id: u8,

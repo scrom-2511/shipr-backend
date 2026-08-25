@@ -88,7 +88,7 @@ pub async fn listen_idle_kill(
             println!("Killed vm for project: {} at {}", idle_req.project_id, now);
             println!("Killed vm for project: {} at {}", idle_req.project_id, now);
 
-            let numeric_id = idle_req.numeric_id;
+            let project_id_int = idle_req.project_id_int;
 
             let start_time = redis
                 .get_conn()
@@ -106,7 +106,7 @@ pub async fn listen_idle_kill(
             use crate::app::models::projects;
             use sea_orm::{ActiveModelTrait, EntityTrait, Set};
 
-            if let Ok(Some(project)) = projects::Entity::find_by_id(numeric_id)
+            if let Ok(Some(project)) = projects::Entity::find_by_id(project_id_int)
                 .one(pool.get_ref())
                 .await
             {
@@ -144,7 +144,7 @@ pub async fn listen_idle_kill(
             let _: () = idle_kill_queue
                 .add_to_queue(&IdleKillReq {
                     project_id: idle_req.project_id.clone(),
-                    numeric_id: idle_req.numeric_id,
+                    project_id_int: idle_req.project_id_int,
                 })
                 .await
                 .unwrap();
