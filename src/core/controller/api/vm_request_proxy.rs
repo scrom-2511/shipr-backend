@@ -8,7 +8,7 @@ use crate::core::controller::storage::redis::Redis;
 use crate::core::controller::vm::heartbeat_store::HeartbeatStore;
 use crate::core::controller::vm::vm_pool::VmPool;
 use actix_web::http::Uri;
-use actix_web::{HttpRequest, HttpResponse, web};
+use actix_web::{App, HttpRequest, HttpResponse, web};
 use redis::AsyncCommands;
 use reqwest::header::{HeaderName, HeaderValue};
 use reqwest::{Client, Method};
@@ -165,28 +165,12 @@ impl VmRequestProxy {
     ) -> Result<HttpResponse, AppError> {
         let (project_id, numeric_id, target_path) = self.extract_project_and_path(&req).await?;
 
-        let start_time_key = format!("project:vm_start_time:{}", project_id);
-
-        let last_activity_key = format!("project:last_request_time:{}", project_id);
-
-        let now = chrono::Utc::now().timestamp();
-
-        let mut redis_conn = self.redis.get_conn();
-
-        let existing_start_time: Option<i64> = redis_conn.get(&start_time_key).await?;
-
-        if existing_start_time.is_none() {
-            let _: () = redis_conn.set(&start_time_key, now).await?;
-
-            self.idle_kill_queue
-                .add_to_queue(&IdleKillReq {
-                    project_id: project_id.clone(),
-                    numeric_id,
-                })
-                .await?;
+        if let Err(e) = self.idle_vm_manager(&project_id, numeric_id).await {
+            println!(
+                "Warning: Failed to update idle vm manager for project {}: {}",
+                numeric_id, e
+            );
         }
-
-        let _: () = redis_conn.set(&last_activity_key, now).await?;
 
         if let Err(e) = self.track_traffic(numeric_id).await {
             println!(
@@ -250,6 +234,32 @@ impl VmRequestProxy {
         Ok(())
     }
 
+    async fn idle_vm_manager(&self, project_id: &str, numeric_id: i32) -> Result<(), AppError> {
+        let start_time_key = format!("project:vm_start_time:{}", project_id);
+
+        let last_activity_key = format!("project:last_request_time:{}", project_id);
+
+        let now = chrono::Utc::now().timestamp();
+
+        let mut redis_conn = self.redis.get_conn();
+
+        let existing_start_time: Option<i64> = redis_conn.get(&start_time_key).await?;
+
+        if existing_start_time.is_none() {
+            let _: () = redis_conn.set(&start_time_key, now).await?;
+
+            self.idle_kill_queue
+                .add_to_queue(&IdleKillReq {
+                    project_id: project_id.to_owned(),
+                    numeric_id,
+                })
+                .await?;
+        }
+
+        let _: () = redis_conn.set(&last_activity_key, now).await?;
+
+        Ok(())
+    }
     async fn wait_for_port(
         &self,
         base_id: u8,
