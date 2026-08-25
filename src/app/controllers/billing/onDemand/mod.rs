@@ -1,2 +1,2 @@
 pub mod auto_top_up;
-pub mod dodo_ondemand_checkout;
+pub mod dodo_auto_topup_checkout;

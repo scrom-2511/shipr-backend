@@ -25,7 +25,7 @@ pub struct DodoOndemandResponse {
     pub checkout_url: String,
 }
 
-pub async fn dodo_ondemand_checkout_controller(
+pub async fn dodo_auto_topup_checkout_controller(
     state: web::Data<AppState>,
     pool: web::Data<DbPool>,
     req: HttpRequest,

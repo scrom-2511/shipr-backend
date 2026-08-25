@@ -12,7 +12,7 @@ use shipr::app::controllers::billing::dodo_checkout::dodo_checkout_controller;
 use shipr::app::controllers::billing::dodo_webhook::dodo_webhook_controller;
 use shipr::app::controllers::billing::get_billing_details::get_billing_details_controller;
 use shipr::app::controllers::billing::onDemand::auto_top_up;
-use shipr::app::controllers::billing::onDemand::dodo_ondemand_checkout::dodo_ondemand_checkout_controller;
+use shipr::app::controllers::billing::onDemand::dodo_auto_topup_checkout::dodo_auto_topup_checkout_controller;
 use shipr::app::controllers::billing::payment_confirmation::payment_confirmation_controller;
 // use shipr::app::controllers::billing::topup::topup_handler;
 use shipr::app::controllers::github::get_state::get_state;
@@ -188,8 +188,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .app_data(web::Data::new(vm_pool.clone()))
             .wrap(cors)
             .app_data(web::Data::new(pool.clone()))
-            // .route("/api/billing/topup", web::post().to(topup_handler))
-            .route("/webhooks/dodo", web::post().to(dodo_webhook_controller))
             .route("/signup", web::post().to(signup_controller))
             .route("/signin", web::post().to(signin_controller))
             .route("/add-project", web::post().to(add_new_project))
@@ -204,9 +202,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .route("/kill-vm", web::post().to(kill_vm_controller))
             .route(
                 "/on-demand-checkout",
-                web::post().to(dodo_ondemand_checkout_controller),
+                web::post().to(dodo_auto_topup_checkout_controller),
             )
-            .route("/auto-top-up", web::post().to(auto_top_up::auto_top_up))
             .route(
                 "/webhook/dodo-payments",
                 web::post().to(dodo_webhook_controller),
