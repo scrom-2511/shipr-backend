@@ -53,6 +53,7 @@ pub struct BillingDetailsResponse {
     pub current_month_cost: f64,
     pub estimated_monthly_cost: f64,
     pub projects: Vec<ProjectBillingUsage>,
+    pub auto_topup_enabled: bool,
 }
 
 const HOURLY_RATE: f64 = 0.02; // $0.02 per hour per microVM
@@ -71,9 +72,11 @@ pub async fn get_billing_details_controller(
     let user_info = users::Entity::find_by_id(user_id)
         .one(pool.as_ref())
         .await
-        .map_err(|e| AppError::Database(e.to_string()))?;
+        .map_err(|e| AppError::Database(e.to_string()))?
+        .ok_or(AppError::UserNotFound)?;
 
-    let credit_balance = user_info.as_ref().map(|u| u.credit_balance).unwrap_or(5000);
+    let credit_balance = user_info.credit_balance;
+    let auto_topup_enabled = user_info.auto_topup_enabled;
 
     // Fetch project usage
     let project_rows = projects::Entity::find()
@@ -120,6 +123,7 @@ pub async fn get_billing_details_controller(
         current_month_cost,
         estimated_monthly_cost,
         projects,
+        auto_topup_enabled,
     };
 
     Ok(HttpResponse::Ok().json(ApiResponse {
