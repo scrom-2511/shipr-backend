@@ -46,6 +46,7 @@ pub mod users {
         pub credit_balance: i64,
         pub dodo_customer_id: Option<String>,
         pub dodo_subscription_id: Option<String>,
+        pub auto_topup_enabled: bool,
         pub created_at: Option<DateTime>,
         pub updated_at: Option<DateTime>,
     }

@@ -23,6 +23,7 @@ impl MigrationTrait for Migration {
                     .col(big_integer(Users::CreditBalance).not_null().default(5000))
                     .col(string(Users::DodoCustomerId).unique_key().null())
                     .col(string(Users::DodoSubscriptionId).unique_key().null())
+                    .col(boolean(Users::AutoTopupEnabled).not_null().default(false))
                     .col(timestamp(Users::CreatedAt).default(Expr::current_timestamp()))
                     .col(timestamp(Users::UpdatedAt).default(Expr::current_timestamp()))
                     .to_owned(),
@@ -157,6 +158,7 @@ enum Users {
     CreditBalance,
     DodoCustomerId,
     DodoSubscriptionId,
+    AutoTopupEnabled,
     CreatedAt,
     UpdatedAt,
 }
