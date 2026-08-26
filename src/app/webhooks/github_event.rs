@@ -18,8 +18,6 @@ pub async fn github_event(
     req: HttpRequest,
     redeploy_queue: web::Data<ReDeployQueue>,
 ) -> Result<(), AppError> {
-    println!("body: {:?}", body);
-
     let event_header = req
         .headers()
         .get("X-GitHub-Event")

@@ -56,17 +56,19 @@ pub async fn github_webhook_installation(
 
     let installation_id = vec![body.installation.id];
 
-    println!("installation_id: {:?}", installation_id);
-
     let new_repo = github_repos::ActiveModel {
         installation_ids: Set(Some(installation_id)),
         ..Default::default()
     };
 
-    new_repo
-        .insert(pool.as_ref())
-        .await
-        .map_err(|_| AppError::InternalServerError)?;
+    match new_repo.insert(pool.as_ref()).await {
+        Ok(_) => {
+            println!("installation id updated in db");
+        }
+        Err(e) => {
+            eprintln!("installation id update failed: {:?}", e);
+        }
+    }
 
     Ok(())
 }
