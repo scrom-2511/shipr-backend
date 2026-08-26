@@ -1,3 +1,4 @@
+use crate::app::controllers::billing::onDemand::auto_top_up::auto_top_up;
 use crate::app::middlewares::AuthMiddleware;
 use crate::app::models::users;
 use crate::app::state::AppState;
@@ -43,11 +44,6 @@ pub async fn dodo_auto_topup_checkout_controller(
 
     let user_dodo_customer_id = user.dodo_customer_id.ok_or(AppError::UserNotFound)?;
 
-    let frontend_url =
-        std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:5173".to_string());
-
-    let return_target = format!("{}/dashboard/billing?status=success", frontend_url);
-
     let product_id = std::env::var("DODO_ONDEMAND_PRODUCT_ID")
         .map_err(|_| AppError::DodoError("DODO_PRODUCT_ID is not configured".to_string()))?;
 
@@ -76,7 +72,7 @@ pub async fn dodo_auto_topup_checkout_controller(
 
             metadata: Some(Box::new(metadata)),
 
-            return_url: Some(return_target),
+            return_url: Some("http://localhost:5173/billing".to_owned()),
 
             show_saved_payment_methods: Some(true),
 
@@ -102,6 +98,10 @@ pub async fn dodo_auto_topup_checkout_controller(
     let checkout_url = result
         .checkout_url
         .ok_or_else(|| AppError::DodoError("Dodo did not return checkout URL".to_string()))?;
+
+    if user.credit_balance < 1000 {
+        auto_top_up(state, pool.as_ref(), user_id).await?;
+    }
 
     let resp_data = DodoOndemandResponse { checkout_url };
 
