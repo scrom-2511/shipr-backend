@@ -24,8 +24,16 @@ impl MigrationTrait for Migration {
                     .col(string(Users::DodoCustomerId).unique_key().null())
                     .col(string(Users::DodoSubscriptionId).unique_key().null())
                     .col(boolean(Users::AutoTopupEnabled).not_null().default(false))
-                    .col(timestamp(Users::CreatedAt).default(Expr::current_timestamp()))
-                    .col(timestamp(Users::UpdatedAt).default(Expr::current_timestamp()))
+                    .col(
+                        timestamp(Users::CreatedAt)
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
+                    .col(
+                        timestamp(Users::UpdatedAt)
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
                     .to_owned(),
             )
             .await?;
@@ -38,14 +46,22 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(pk_auto(GithubRepos::Id))
                     .col(ColumnDef::new(GithubRepos::InstallationIds).array(ColumnType::Integer))
-                    .col(integer(GithubRepos::UserId))
+                    .col(integer(GithubRepos::UserId).null())
                     .foreign_key(
                         ForeignKey::create()
                             .from(GithubRepos::Table, GithubRepos::UserId)
                             .to(Users::Table, Users::Id),
                     )
-                    .col(timestamp(GithubRepos::CreatedAt).default(Expr::current_timestamp()))
-                    .col(timestamp(GithubRepos::UpdatedAt).default(Expr::current_timestamp()))
+                    .col(
+                        timestamp(GithubRepos::CreatedAt)
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
+                    .col(
+                        timestamp(GithubRepos::UpdatedAt)
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
                     .to_owned(),
             )
             .await?;
@@ -71,28 +87,36 @@ impl MigrationTrait for Migration {
                     .col(
                         ColumnDef::new(Projects::ProjectType)
                             .custom("project_type")
-                            .not_null(),
+                            .null(),
                     )
                     .col(string(Projects::FullName).not_null())
                     .col(string(Projects::RootDir).not_null())
-                    .col(string(Projects::Url).unique_key())
+                    .col(string(Projects::Url).unique_key().null())
                     .col(integer(Projects::UserId).not_null())
                     .foreign_key(
                         ForeignKey::create()
                             .from(Projects::Table, Projects::UserId)
                             .to(Users::Table, Users::Id),
                     )
-                    .col(string(Projects::CommitHash).not_null())
-                    .col(ColumnDef::new(Projects::Envs).json_binary())
-                    .col(timestamp(Projects::LastDeploymentTime).default(Expr::current_timestamp()))
+                    .col(string(Projects::CommitHash).null())
+                    .col(ColumnDef::new(Projects::Envs).json_binary().null())
+                    .col(timestamp(Projects::LastDeploymentTime).null())
                     .col(
                         ColumnDef::new(Projects::Status)
                             .custom("project_status")
                             .not_null(),
                     )
-                    .col(integer(Projects::ActiveSeconds).default(0))
-                    .col(timestamp(Projects::CreatedAt).default(Expr::current_timestamp()))
-                    .col(timestamp(Projects::UpdatedAt).default(Expr::current_timestamp()))
+                    .col(big_integer(Projects::ActiveSeconds).not_null().default(0))
+                    .col(
+                        timestamp(Projects::CreatedAt)
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
+                    .col(
+                        timestamp(Projects::UpdatedAt)
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
                     .to_owned(),
             )
             .await?;
@@ -107,8 +131,16 @@ impl MigrationTrait for Migration {
                     .col(integer(ProjectTraffic::ProjectId).not_null())
                     .col(date(ProjectTraffic::Date).not_null())
                     .col(integer(ProjectTraffic::RequestCount).not_null().default(0))
-                    .col(timestamp(ProjectTraffic::CreatedAt).default(Expr::current_timestamp()))
-                    .col(timestamp(ProjectTraffic::UpdatedAt).default(Expr::current_timestamp()))
+                    .col(
+                        timestamp(ProjectTraffic::CreatedAt)
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
+                    .col(
+                        timestamp(ProjectTraffic::UpdatedAt)
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
                     .foreign_key(
                         ForeignKey::create()
                             .from(ProjectTraffic::Table, ProjectTraffic::ProjectId)
@@ -130,8 +162,16 @@ impl MigrationTrait for Migration {
                     .col(string(Billing::CheckoutSessionId).unique_key().not_null())
                     .col(big_integer(Billing::Amount).not_null())
                     .col(string(Billing::Currency).not_null())
-                    .col(timestamp(Billing::CreatedAt).default(Expr::current_timestamp()))
-                    .col(timestamp(Billing::UpdatedAt).default(Expr::current_timestamp()))
+                    .col(
+                        timestamp(Billing::CreatedAt)
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
+                    .col(
+                        timestamp(Billing::UpdatedAt)
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
                     .foreign_key(
                         ForeignKey::create()
                             .from(Billing::Table, Billing::UserId)
@@ -179,13 +219,9 @@ enum Projects {
     Table,
     Id,
     ProjectId,
-    InstallCmds,
-    RunCmds,
-    BuildCmds,
     Branch,
     ProjectType,
     FullName,
-    DistDir,
     RootDir,
     Url,
     UserId,
@@ -218,6 +254,9 @@ pub enum ProjectType {
 pub enum ProjectStatus {
     #[sea_orm(string_value = "deploying")]
     Deploying,
+
+    #[sea_orm(string_value = "ready")]
+    Ready,
 
     #[sea_orm(string_value = "running")]
     Running,
