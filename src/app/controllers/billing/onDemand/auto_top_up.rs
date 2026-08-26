@@ -12,20 +12,14 @@ use crate::app::db::DbPool;
 use crate::app::models::users;
 use crate::app::state::AppState;
 use crate::app_errors::AppError;
-use serde::Deserialize;
-
-#[derive(Deserialize)]
-pub struct AutoTopUpRequest {
-    user_id: i32,
-}
 
 pub async fn auto_top_up(
     state: web::Data<AppState>,
-    pool: DbPool,
+    pool: &DbPool,
     user_id: i32,
 ) -> Result<(), AppError> {
     let user = users::Entity::find_by_id(user_id)
-        .one(&pool)
+        .one(pool)
         .await?
         .ok_or(AppError::UserNotFound)?;
 
