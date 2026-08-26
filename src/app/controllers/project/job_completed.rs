@@ -2,6 +2,9 @@ use crate::app::db::DbPool;
 use crate::app::models::projects;
 use crate::app_errors::AppError;
 use crate::core::app_types::{JobCompletedReq, JobType};
+use crate::core::controller::vm::id_allocator::IdAllocator;
+use crate::core::controller::vm::vm_pool::VmPool;
+use crate::core::infra::kill_vm::kill_vm;
 use actix_web::{HttpResponse, web};
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use serde_json::json;
@@ -9,6 +12,7 @@ use serde_json::json;
 pub async fn job_completed_controller(
     pool: web::Data<DbPool>,
     body: web::Json<JobCompletedReq>,
+    vm_pool: web::Data<VmPool>,
 ) -> Result<HttpResponse, AppError> {
     let body = body.into_inner();
     let now = chrono::Utc::now().naive_utc();
@@ -18,36 +22,54 @@ pub async fn job_completed_controller(
         body.project_id, body
     );
 
-    let project = projects::Entity::find()
+    let project = match projects::Entity::find()
         .filter(projects::Column::ProjectId.eq(&body.project_id))
         .one(pool.as_ref())
         .await
-        .map_err(|e| AppError::Database(e.to_string()))?
-        .ok_or_else(|| {
-            AppError::Database(format!(
+    {
+        Ok(Some(project)) => project,
+        Err(e) => {
+            eprintln!("Error fetching project: {}", e.to_string());
+            return Err(AppError::Database(format!(
+                "Error fetching project: {}",
+                e.to_string()
+            )));
+        }
+        Ok(None) => {
+            return Err(AppError::Database(format!(
                 "No project found with project_id: {}",
                 body.project_id
-            ))
-        })?;
+            )));
+        }
+    };
 
     let mut active_project: projects::ActiveModel = project.into();
     active_project.last_deployment_time = Set(Some(now));
-    active_project.project_type = Set(body.project_type);
-    active_project.status = Set(crate::app::models::ProjectStatus::Running);
+    active_project.project_type = Set(Some(body.project_type));
+    active_project.status = Set(crate::app::models::ProjectStatus::Ready);
 
     if body.job_type == JobType::Deploy || body.job_type == JobType::Redeploy {
         if let Some(hash) = body.commit_hash {
-            active_project.commit_hash = Set(hash);
+            active_project.commit_hash = Set(Some(hash));
         }
         if let Some(b) = body.branch {
             active_project.branch = Set(b);
         }
     }
 
-    active_project
-        .update(pool.as_ref())
+    kill_vm(&body.project_id, &body.job_type, &vm_pool)
         .await
-        .map_err(|e| AppError::Database(e.to_string()))?;
+        .ok()
+        .unwrap();
 
-    Ok(HttpResponse::Ok().json(json!({"message": "Project status updated"})))
+    match active_project.update(pool.as_ref()).await {
+        Ok(_) => Ok(HttpResponse::Ok().json(json!({"message": "Project status updated"}))),
+        Err(e) => {
+            eprintln!("Error updating project: {}", e.to_string());
+            Err(AppError::Database(format!(
+                "Error updating project: {}",
+                e.to_string()
+            )))
+        }
+    }
 }

@@ -1,4 +1,3 @@
-use crate::app::controllers::billing::onDemand::auto_top_up::{AutoTopUpRequest, auto_top_up};
 use crate::app::db::DbPool;
 use crate::app::models::{project_traffic, projects, users};
 use crate::app::state::AppState;
@@ -169,14 +168,14 @@ impl VmRequestProxy {
     ) -> Result<HttpResponse, AppError> {
         let (project_id, project_id_int, target_path) = self.extract_project_and_path(&req).await?;
 
-        if let Err(e) = self.idle_vm_manager(&project_id, project_id_int).await {
+        if let Err(e) = self.idle_vm_manager(&project_id).await {
             println!(
                 "Warning: Failed to update idle vm manager for project {}: {}",
                 project_id_int, e
             );
         }
 
-        if let Err(e) = self.track_traffic(project_id_int).await {
+        if let Err(e) = self.track_traffic(&project_id).await {
             println!(
                 "Warning: Failed to track traffic for project {}: {}",
                 project_id_int, e
@@ -184,10 +183,6 @@ impl VmRequestProxy {
         }
 
         self.job_dispatcher.dispatch_run_job(&project_id).await?;
-
-        self.heartbeat_store
-            .heartbeat(&project_id, Duration::from_secs(30))
-            .await?;
 
         println!("Job dispatched");
 
@@ -209,8 +204,9 @@ impl VmRequestProxy {
         Ok(resp)
     }
 
-    async fn track_traffic(&self, project_id: i32) -> Result<(), AppError> {
-        let project = project_traffic::Entity::find_by_id(project_id)
+    async fn track_traffic(&self, project_id: &str) -> Result<(), AppError> {
+        let project = project_traffic::Entity::find()
+            .filter(project_traffic::Column::ProjectId.eq(project_id))
             .one(&self.pool)
             .await
             .map_err(|e| AppError::Database(e.to_string()))?;
@@ -238,10 +234,10 @@ impl VmRequestProxy {
         Ok(())
     }
 
-    async fn idle_vm_manager(&self, project_id: &str, project_id_int: i32) -> Result<(), AppError> {
+    async fn idle_vm_manager(&self, project_id: &str) -> Result<(), AppError> {
         let start_time_key = format!("project:vm_start_time:{}", project_id);
 
-        let last_activity_key = format!("project:last_request_time:{}", project_id);
+        let last_activity_key = format!("project:last_request_time");
 
         let now = chrono::Utc::now().timestamp();
 
@@ -251,76 +247,9 @@ impl VmRequestProxy {
 
         if existing_start_time.is_none() {
             let _: () = redis_conn.set(&start_time_key, now).await?;
-
-            self.idle_kill_queue
-                .add_to_queue(&IdleKillReq {
-                    project_id: project_id.to_owned(),
-                    project_id_int,
-                })
-                .await?;
         }
 
-        let _: () = redis_conn.set(&last_activity_key, now).await?;
-
-        Ok(())
-    }
-
-    async fn check_and_add_credits(
-        &self,
-        pool: &DbPool,
-        project_id_int: i32,
-    ) -> Result<(), AppError> {
-        let mut conn = self.redis.get_conn();
-
-        let project_key = project_id_int.to_string();
-
-        let user_id: i32 = match conn.get(&project_key).await {
-            Ok(user_id) => user_id,
-
-            Err(_) => {
-                let project = projects::Entity::find_by_id(project_id_int)
-                    .one(pool)
-                    .await
-                    .map_err(|e| AppError::Database(e.to_string()))?
-                    .ok_or_else(|| AppError::Database("Project not found".to_string()))?;
-
-                let _: () = conn
-                    .set_ex(&project_key, project.user_id, 60 * 60 * 24)
-                    .await
-                    .map_err(|e| AppError::Redis(e))?;
-
-                project.user_id
-            }
-        };
-
-        let credits_key = format!("credits:{}", user_id);
-        let auto_topup_key = format!("auto_topup:{}", user_id);
-
-        let credits: Option<i64> = conn.get(&credits_key).await.ok();
-
-        let auto_topup_enabled: Option<bool> = conn.get(&auto_topup_key).await.ok();
-
-        let (credits, auto_topup_enabled) =
-            if let (Some(credits), Some(auto_topup_enabled)) = (credits, auto_topup_enabled) {
-                (credits, auto_topup_enabled)
-            } else {
-                let user = users::Entity::find_by_id(user_id)
-                    .one(pool)
-                    .await
-                    .map_err(|e| AppError::Database(e.to_string()))?
-                    .ok_or_else(|| AppError::Database("User not found".to_string()))?;
-
-                let _: () = conn
-                    .set_ex(&auto_topup_key, user.auto_topup_enabled, 60 * 60 * 24)
-                    .await
-                    .map_err(|e| AppError::Redis(e))?;
-
-                (user.credit_balance, user.auto_topup_enabled)
-            };
-
-        if credits < 10 && auto_topup_enabled {
-            auto_top_up(self.state.clone(), self.pool.clone(), user_id).await?;
-        }
+        let _: () = redis_conn.zadd(&last_activity_key, project_id, now).await?;
 
         Ok(())
     }
