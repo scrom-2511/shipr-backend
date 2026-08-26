@@ -70,7 +70,7 @@ pub async fn listen_idle_kill(
         let now = chrono::Utc::now().timestamp();
 
         if now - last_activity + 20 >= IDLE_TIMEOUT_SECS {
-            kill_vm(&idle_req.project_id, &JobType::Run, &vm_pool, &id_allocator)
+            kill_vm(&idle_req.project_id, &JobType::Run, &vm_pool)
                 .await
                 .ok()
                 .unwrap();
@@ -103,7 +103,7 @@ pub async fn listen_idle_kill(
                 let mut active_project: projects::ActiveModel = project.into();
                 active_project.active_seconds = Set(new_active_seconds);
                 active_project.status = Set(crate::app::models::ProjectStatus::Stopped);
-                active_project.updated_at = Set(Some(chrono::Utc::now().naive_utc()));
+                active_project.updated_at = Set(chrono::Utc::now().naive_utc());
                 let _ = active_project.update(pool.get_ref()).await;
             }
 

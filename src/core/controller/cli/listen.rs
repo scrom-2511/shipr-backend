@@ -19,7 +19,6 @@ use crate::{
             deploy::deploy_handler,
             kill_vm::kill_vm_handler,
             logs::{logs_handler, stream_logs_handler},
-            redeployment_completed::redeploy_completed_handler,
         },
         queue::{
             deploy_queue::DeployQueue, idle_kill_queue::IdleKillQueue, lapin::Lapin,
@@ -142,10 +141,6 @@ pub async fn listen(
             .route("/deploy", web::post().to(deploy_handler))
             .route("/send-logs", web::post().to(logs_handler))
             .route("/logs/{project_id}", web::get().to(stream_logs_handler))
-            .route(
-                "/redeploy-completed",
-                web::post().to(redeploy_completed_handler),
-            )
     })
     .bind(("127.0.0.1", 3000))?
     .run()

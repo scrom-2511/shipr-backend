@@ -1,6 +1,6 @@
 use actix_web::web;
 use clap::{Parser, Subcommand};
-// // use jsonwebtoken::crypto::rust_crypto;
+use jsonwebtoken::crypto::rust_crypto;
 
 use crate::{
     app::{db::DbPool, state::AppState},
@@ -8,7 +8,7 @@ use crate::{
     core::{
         app_types::DeployReq,
         controller::{
-            cli::{deploy::deploy, listen::listen, serve::serve},
+            cli::{deploy::deploy, idle_vms_kill::run_kill_idle_vms, listen::listen, serve::serve},
             storage::{redis::Redis, s3::S3Service},
             vm::{heartbeat_store::HeartbeatStore, id_allocator::IdAllocator, vm_pool::VmPool},
         },
@@ -51,6 +51,7 @@ enum Commands {
     Serve,
     Listen,
     Test,
+    IdleKillVms,
 }
 
 pub async fn cli(
@@ -124,6 +125,10 @@ pub async fn cli(
                 )
                 .await?;
             println!("{:?}", commit);
+        }
+
+        Commands::IdleKillVms => {
+            run_kill_idle_vms(&redis, &vm_pool, &pool, state).await;
         }
     }
 
