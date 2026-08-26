@@ -34,11 +34,11 @@ impl VmPool {
         job_type: &JobType,
         vm_id: u8,
     ) -> Result<(), AppError> {
-        let project_id = &format!("{}_{}", project_id, job_type);
+        let project_id_with_job_type = &format!("{}_{}", project_id, job_type);
 
         let mut conn = self.redis.get_conn();
 
-        let _: () = conn.set(project_id, vm_id).await?;
+        let _: () = conn.set(project_id_with_job_type, vm_id).await?;
 
         Ok(())
     }
@@ -61,13 +61,16 @@ impl VmPool {
         &self,
         project_id: &str,
         job_type: &JobType,
+        vm_id: u8,
     ) -> Result<(), AppError> {
         println!("Removing from pool: {}", project_id);
-        let project_id = &format!("{}_{}", project_id, job_type);
+        let project_id_with_job_type = &format!("{}_{}", project_id, job_type);
 
         let mut conn = self.redis.get_conn();
 
-        let _: () = conn.del(project_id).await?;
+        let _: () = conn.del(project_id_with_job_type).await?;
+        let _: () = conn.zrem("project:last_request_time", &project_id).await?;
+        self.id_allocator.release_id(vm_id).await?;
 
         Ok(())
     }

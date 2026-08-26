@@ -74,7 +74,7 @@ pub async fn get_project_details_controller(
         crate::app::models::ProjectStatus::ErrorStatus => "error",
     };
 
-    let config = get_default_config(&row.project_type);
+    let config = get_default_config(&row.project_type.unwrap());
 
     let install_cmds = config
         .install_commands
@@ -109,7 +109,7 @@ pub async fn get_project_details_controller(
         build_cmds,
         run_cmds,
         github_url: row.url.unwrap_or_default(),
-        commit_hash: row.commit_hash,
+        commit_hash: row.commit_hash.unwrap(),
     };
 
     println!(

@@ -41,6 +41,7 @@ use shipr::core::controller::queue::lapin::Lapin;
 use shipr::core::controller::queue::redeploy_queue::ReDeployQueue;
 use shipr::core::controller::storage::redis::Redis;
 use shipr::core::controller::storage::s3::S3Service;
+use shipr::core::controller::vm::firecracker::Firecracker;
 use shipr::core::controller::vm::heartbeat_store::HeartbeatStore;
 use shipr::core::controller::vm::id_allocator::IdAllocator;
 use shipr::core::controller::vm::vm_pool::VmPool;
@@ -165,7 +166,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     HttpServer::new(move || {
         let cors = actix_cors::Cors::default()
-            .allowed_origin("https://healthcare-camcorders-oecd-flour.trycloudflare.com")
+            .allowed_origin("https://golden-corner-navigator-kent.trycloudflare.com")
             .allowed_origin("http://localhost:5173")
             .allow_any_method()
             .allow_any_header()

@@ -84,8 +84,8 @@ pub mod github_repos {
         pub id: i32,
         pub installation_ids: Option<Vec<i32>>,
         pub user_id: Option<i32>,
-        pub created_at: Option<DateTime>,
-        pub updated_at: Option<DateTime>,
+        pub created_at: DateTime,
+        pub updated_at: DateTime,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -120,18 +120,18 @@ pub mod projects {
         #[sea_orm(unique)]
         pub project_id: String,
         pub branch: String,
-        pub project_type: ProjectType,
+        pub project_type: Option<ProjectType>,
         pub full_name: String,
         pub root_dir: String,
         pub url: Option<String>,
         pub user_id: i32,
-        pub commit_hash: String,
+        pub commit_hash: Option<String>,
         pub envs: Option<serde_json::Value>,
         pub last_deployment_time: Option<DateTime>,
         pub status: ProjectStatus,
         pub active_seconds: i64,
-        pub created_at: Option<DateTime>,
-        pub updated_at: Option<DateTime>,
+        pub created_at: DateTime,
+        pub updated_at: DateTime,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -166,8 +166,8 @@ pub mod project_traffic {
         pub project_id: i32,
         pub date: Date,
         pub request_count: i32,
-        pub created_at: Option<DateTime>,
-        pub updated_at: Option<DateTime>,
+        pub created_at: DateTime,
+        pub updated_at: DateTime,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -204,8 +204,8 @@ pub mod billing {
         pub checkout_session_id: String,
         pub amount: i64,
         pub currency: String,
-        pub created_at: Option<DateTime>,
-        pub updated_at: Option<DateTime>,
+        pub created_at: DateTime,
+        pub updated_at: DateTime,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

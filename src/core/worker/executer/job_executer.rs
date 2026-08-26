@@ -85,9 +85,22 @@ impl JobExecuter {
             build(deploy_details, &shipr_json).await?;
 
             let project_path = self.get_project_path(deploy_details, &shipr_json)?;
-            let p_type = detect_project_type(&project_path);
+            let project_type = detect_project_type(&project_path);
 
-            Ok::<((String, Option<String>), ProjectType), AppError>(((commit_hash, branch), p_type))
+            Host::new()
+                .job_completed(
+                    deploy_details.project_id.clone(),
+                    job_type.clone(),
+                    Some(commit_hash.clone()),
+                    project_type.clone(),
+                    branch.clone(),
+                )
+                .await?;
+
+            Ok::<((String, Option<String>), ProjectType), AppError>((
+                (commit_hash, branch),
+                project_type,
+            ))
         }
         .await;
 

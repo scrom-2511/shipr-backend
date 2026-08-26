@@ -27,14 +27,15 @@ pub async fn deploy_project_controller(
 
     let user_id = req.extensions().get::<AuthMiddleware>().unwrap().user_id;
 
-    let github_repo = github_repos::Entity::find()
+    let installation_repo = match github_repos::Entity::find()
         .filter(github_repos::Column::UserId.eq(user_id))
         .one(pool.as_ref())
         .await
-        .map_err(|e| AppError::Database(e.to_string()))?;
-
-    let installation_repo =
-        github_repo.ok_or_else(|| AppError::Database("Installation id not found".to_string()))?;
+    {
+        Ok(Some(repo)) => repo,
+        Ok(None) => return Err(AppError::Database("Installation id not found".to_string())),
+        Err(e) => return Err(AppError::Database(e.to_string())),
+    };
 
     let installation_id = body.installation_id as i32;
 
@@ -68,21 +69,22 @@ pub async fn deploy_project_controller(
         full_name: Set(body.full_name.clone()),
         user_id: Set(user_id),
         last_deployment_time: Set(Some(now)),
-        created_at: Set(Some(now)),
-        updated_at: Set(Some(now)),
+        created_at: Set(now),
+        updated_at: Set(now),
         branch: Set(body.branch),
         envs: Set(Some(envs)),
         ..Default::default()
     };
 
-    new_project
-        .insert(pool.as_ref())
-        .await
-        .map_err(|e| AppError::Database(e.to_string()))?;
-
-    Ok(HttpResponse::Ok().json(ApiResponse::<()> {
-        success: true,
-        message: "Project added to queue successfully".to_string(),
-        data: None,
-    }))
+    match new_project.insert(pool.as_ref()).await {
+        Ok(_) => Ok(HttpResponse::Ok().json(ApiResponse::<()> {
+            success: true,
+            message: "Project added to queue successfully".to_string(),
+            data: None,
+        })),
+        Err(e) => {
+            println!("Error in creating new project: {}", e);
+            return Err(AppError::Database(e.to_string()));
+        }
+    }
 }
