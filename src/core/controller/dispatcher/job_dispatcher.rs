@@ -178,10 +178,20 @@ impl JobDispatcher {
 
         println!("scp cmd run completed");
 
-        vm.execute_command("cd /root && ./worker job.json deploy")
-            .await?;
+        vm.execute_command_bg("cd /root && ./worker job.json deploy")?;
 
         println!("execute command completed");
+
+        let id_allocator = self.id_allocator.clone();
+        let vm_pool = self.vm_pool.clone();
+
+        tokio::task::spawn(async move {
+            let mut new_vm = Firecracker::new_from_id_allocator(&id_allocator).await;
+
+            new_vm.create_hot_vm(&vm_pool).await?;
+
+            Ok::<(), AppError>(())
+        });
 
         Ok(())
     }
@@ -236,8 +246,18 @@ impl JobDispatcher {
             get_dir(),
         ).await?;
 
-        vm.execute_command("cd /root && ./worker job.json redeploy")
-            .await?;
+        vm.execute_command_bg("cd /root && ./worker job.json redeploy")?;
+
+        let id_allocator = self.id_allocator.clone();
+        let vm_pool = self.vm_pool.clone();
+
+        tokio::task::spawn(async move {
+            let mut new_vm = Firecracker::new_from_id_allocator(&id_allocator).await;
+
+            new_vm.create_hot_vm(&vm_pool).await?;
+
+            Ok::<(), AppError>(())
+        });
 
         Ok(())
     }
@@ -318,17 +338,6 @@ impl JobDispatcher {
                 let mut new_vm = Firecracker::new_from_id_allocator(&id_allocator).await;
 
                 new_vm.create_hot_vm(&vm_pool).await?;
-
-                loop {
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-
-                    let dead = heartbeat_store.is_dead(&project_id).await?;
-
-                    if dead {
-                        // kill_vm(&project_id, &JobType::Run, &vm_pool, &id_allocator).await?;
-                        break;
-                    }
-                }
 
                 Ok::<(), AppError>(())
             });

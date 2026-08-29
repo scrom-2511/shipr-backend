@@ -166,7 +166,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     HttpServer::new(move || {
         let cors = actix_cors::Cors::default()
-            .allowed_origin("https://golden-corner-navigator-kent.trycloudflare.com")
+            .allowed_origin("https://wonderful-sheep-lee-ability.trycloudflare.com")
             .allowed_origin("http://localhost:5173")
             .allow_any_method()
             .allow_any_header()

@@ -61,32 +61,18 @@ impl DeployQueue {
         Ok(())
     }
 
-    pub async fn pop_from_queue(&self) -> Result<DeployReq, AppError> {
-        let mut consumer = self
+    pub async fn create_consumer(&self, consumer_tag: &str) -> Result<lapin::Consumer, AppError> {
+        let consumer = self
             .channel
             .basic_consume(
                 ShortString::from("deploy_queue"),
-                ShortString::from("deploy_queue"),
+                ShortString::from(consumer_tag),
                 Default::default(),
                 Default::default(),
             )
             .await
             .map_err(|e| AppError::LapinError(e.to_string()))?;
 
-        while let Some(delivery) = consumer.next().await {
-            let delivery = delivery.map_err(|e| AppError::LapinError(e.to_string()))?;
-
-            let data = serde_json::from_slice::<DeployReq>(&delivery.data)
-                .map_err(|e| AppError::LapinError(e.to_string()))?;
-
-            delivery
-                .ack(BasicAckOptions::default())
-                .await
-                .map_err(|e| AppError::LapinError(e.to_string()))?;
-
-            return Ok(data);
-        }
-
-        Err(AppError::QueueError("No message received".to_string()))
+        Ok(consumer)
     }
 }

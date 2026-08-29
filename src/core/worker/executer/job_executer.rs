@@ -45,11 +45,7 @@ impl JobExecuter {
         }
     }
 
-    fn get_project_path(
-        &self,
-        deploy_details: &DeployDetails,
-        shipr_json: &ShiprJson,
-    ) -> Result<String, AppError> {
+    fn get_project_path(&self, deploy_details: &DeployDetails) -> Result<String, AppError> {
         let repo_name = deploy_details.project_id.to_owned();
 
         if deploy_details.root_dir == "." {
@@ -84,18 +80,8 @@ impl JobExecuter {
             install(deploy_details, &shipr_json).await?;
             build(deploy_details, &shipr_json).await?;
 
-            let project_path = self.get_project_path(deploy_details, &shipr_json)?;
+            let project_path = self.get_project_path(deploy_details)?;
             let project_type = detect_project_type(&project_path);
-
-            Host::new()
-                .job_completed(
-                    deploy_details.project_id.clone(),
-                    job_type.clone(),
-                    Some(commit_hash.clone()),
-                    project_type.clone(),
-                    branch.clone(),
-                )
-                .await?;
 
             Ok::<((String, Option<String>), ProjectType), AppError>((
                 (commit_hash, branch),
@@ -170,13 +156,13 @@ impl JobExecuter {
 
         println!("unzip command completed");
 
-        let copy_job_json = format!("cp /root/{}/job.json /root/", project_id);
+        let copy_job_json = format!("cp /root/{}/shipr/job.json /root/", project_id);
 
         run_script(vec![&copy_job_json], get_worker_dir()).await?;
 
         println!("copy job json completed");
 
-        let job_json_str = fs::read_to_string(format!("/root/{}/root/job.json", project_id))?;
+        let job_json_str = fs::read_to_string("/root/job.json")?;
 
         let mut job_json = serde_json::from_str::<DeployDetails>(&job_json_str)?;
 
@@ -209,6 +195,19 @@ impl JobExecuter {
         run_script(vec![&rm_previous_project], get_worker_dir()).await?;
 
         self.execute(&job_json, job_type, Some(commit_hash)).await?;
+
+        let project_path = self.get_project_path(&job_json)?;
+        let project_type = detect_project_type(&project_path);
+
+        self.host
+            .job_completed(
+                redeploy_details.project_id.clone(),
+                JobType::Redeploy,
+                Some(redeploy_details.commit_hash.clone()),
+                project_type,
+                redeploy_details.branch.clone(),
+            )
+            .await?;
 
         Ok(())
     }

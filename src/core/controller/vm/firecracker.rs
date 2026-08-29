@@ -15,7 +15,7 @@ use std::{
 #[derive(Clone)]
 pub struct Firecracker {
     api_socket: String,
-    vm_id: u8,
+    pub vm_id: u8,
     client: reqwest::Client,
     base_id: u8,
 }

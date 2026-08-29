@@ -1,10 +1,13 @@
 use std::time::Duration;
 
 use actix_web::web;
+use futures::StreamExt;
+use lapin::options::BasicAckOptions;
 
 use crate::{
+    app_errors::AppError,
     core::{
-        app_types::DeployDetails,
+        app_types::{DeployDetails, DeployReq},
         controller::{
             dispatcher::job_dispatcher::JobDispatcher,
             queue::deploy_queue::DeployQueue,
@@ -21,25 +24,47 @@ pub async fn listen_deploy(
     id_allocator: IdAllocator,
     vm_pool: VmPool,
     deploy_queue: web::Data<DeployQueue>,
-) {
+) -> Result<(), AppError> {
+    let mut consumer = deploy_queue
+        .create_consumer("deploy-worker")
+        .await
+        .map_err(|e| AppError::LapinError(e.to_string()))?;
+
     loop {
-        let deploy_details_req = match deploy_queue.pop_from_queue().await {
-            Ok(v) => v,
-            Err(e) => {
-                eprintln!("Queue error: {:?}", e);
-                tokio::time::sleep(Duration::from_secs(1)).await;
+        let delivery = match consumer.next().await {
+            Some(Ok(delivery)) => delivery,
+            Some(Err(e)) => {
+                eprintln!("RabbitMQ error: {:?}", e);
                 continue;
             }
+            None => return Ok(()),
         };
+
+        let deploy_details_req = serde_json::from_slice::<DeployReq>(&delivery.data)?;
 
         let installation_id = deploy_details_req.installation_id;
 
+        println!(
+            "[DEPLOY] {} - fetching GitHub access token",
+            deploy_details_req.project_id
+        );
+
         let github = GithubApp::new();
+
+        println!(
+            "[DEPLOY] {} - BEFORE get_installation_access_token",
+            deploy_details_req.project_id
+        );
 
         let access_token = github
             .get_installation_access_token(installation_id)
             .await
             .unwrap();
+
+        println!(
+            "[DEPLOY] {} - AFTER get_installation_access_token",
+            deploy_details_req.project_id
+        );
 
         let url = format!("https://github.com/{}.git", deploy_details_req.full_name);
 
@@ -72,6 +97,11 @@ pub async fn listen_deploy(
         if let Err(e) = job_dispatcher.dispatch_deploy_job(&deploy_details).await {
             eprintln!("Job dispatch failed: {:?}", e);
         }
+
+        delivery
+            .ack(BasicAckOptions::default())
+            .await
+            .map_err(|e| AppError::LapinError(e.to_string()))?;
 
         tokio::task::spawn(async move {
             let mut new_vm = Firecracker::new_from_id_allocator(&id_allocator).await;

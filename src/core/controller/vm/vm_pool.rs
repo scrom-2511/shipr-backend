@@ -121,7 +121,16 @@ impl VmPool {
                 Ok((vm, false))
             }
             None => {
-                let vm_id = self.get_hot_vm().await?.unwrap();
+                let mut vm_id = self.get_hot_vm().await?;
+
+                if vm_id.is_none() {
+                    let mut new_vm = Firecracker::new_from_id_allocator(&self.id_allocator).await;
+                    new_vm.create_hot_vm(&self).await?;
+
+                    return Ok((new_vm, true));
+                }
+
+                let vm_id = vm_id.unwrap();
 
                 println!("VM id2: {}", vm_id);
                 let new_vm = Firecracker::new_from_vm_id(vm_id);
